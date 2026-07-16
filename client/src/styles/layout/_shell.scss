@@ -22,13 +22,13 @@
 .grid-empty {
   margin-top: 4rem;
   text-align: center;
-  color: $encre-60;
+  color: var(--text-muted);
 
   &__title {
     font-family: $font-display;
     font-size: 1.75rem;
     font-weight: 600;
-    color: $encre;
+    color: var(--text);
     margin-bottom: 0.5rem;
   }
 }

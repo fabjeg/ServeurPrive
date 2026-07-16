@@ -2,6 +2,8 @@
 @use "abstracts/variables";
 @use "abstracts/mixins";
 
+@use "themes/light";
+
 @use "vendors/fonts";
 
 @use "base/reset";
@@ -21,5 +23,3 @@
 @use "components/viewer";
 
 @use "pages/login";
-
-@use "themes/default";

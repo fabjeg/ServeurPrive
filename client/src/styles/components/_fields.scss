@@ -17,7 +17,7 @@
     font-size: 0.9375rem;
 
     &::placeholder {
-      color: $encre-35;
+      color: var(--text-faint);
     }
   }
 }

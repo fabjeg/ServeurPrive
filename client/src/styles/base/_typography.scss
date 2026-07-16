@@ -4,7 +4,7 @@ body {
   font-family: $font-text;
   font-size: 0.9375rem;
   line-height: 1.5;
-  color: $encre;
+  color: var(--text);
   -webkit-font-smoothing: antialiased;
 }
 

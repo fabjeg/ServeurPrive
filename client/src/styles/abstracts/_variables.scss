@@ -1,23 +1,18 @@
-// Palette Frigo — 5 valeurs nommées (voir DESIGN.md)
+// Palette Frigo — 5 valeurs nommées (voir DESIGN.md), source des thèmes.
+// Les composants ne les consomment jamais directement : uniquement var(--…)
+// définies dans themes/_light.scss (et _dark.scss).
 $givre: #eef3f7; // fond
 $banquise: #ffffff; // surfaces
 $encre: #14303c; // texte, encre pétrole
 $glacier: #2e7ca8; // actions primaires
 $balise: #c2410c; // destructif uniquement
 
-// Dérivés utilitaires (teintes des 5 valeurs, jamais de nouvelle couleur)
-$encre-60: rgba($encre, 0.6);
-$encre-35: rgba($encre, 0.35);
-$encre-12: rgba($encre, 0.12);
-$glacier-10: rgba($glacier, 0.1);
-
 // Typographies
 $font-display: "Bricolage Grotesque Variable", sans-serif;
 $font-text: "IBM Plex Sans", sans-serif;
 $font-mono: "IBM Plex Mono", monospace;
 
-// Rythme
+// Rythme (invariant entre thèmes)
 $radius: 6px;
 $gap: 1rem;
 $sidebar-width: 240px;
-$shadow-card: 0 1px 2px rgba($encre, 0.08), 0 4px 12px rgba($encre, 0.06);

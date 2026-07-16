@@ -9,13 +9,13 @@
   gap: 0.4rem;
   padding: 0.55rem 1rem;
   border-radius: $radius;
-  border: 1px solid $encre-12;
-  background: $banquise;
+  border: 1px solid var(--border);
+  background: var(--surface);
   font-weight: 500;
   font-size: 0.875rem;
 
   &:hover {
-    border-color: $encre-35;
+    border-color: var(--text-faint);
   }
 
   &:disabled {
@@ -24,23 +24,23 @@
   }
 
   &--primary {
-    background: $glacier;
-    border-color: $glacier;
-    color: $banquise;
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-contrast);
 
     &:hover:not(:disabled) {
-      filter: brightness(0.92);
-      border-color: $glacier;
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
     }
   }
 
   &--danger {
-    color: $balise;
-    border-color: rgba($balise, 0.4);
+    color: var(--danger);
+    border-color: color-mix(in srgb, var(--danger) 40%, transparent);
 
     &:hover {
-      background: rgba($balise, 0.08);
-      border-color: $balise;
+      background: color-mix(in srgb, var(--danger) 8%, transparent);
+      border-color: var(--danger);
     }
   }
 }

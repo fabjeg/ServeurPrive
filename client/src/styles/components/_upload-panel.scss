@@ -3,6 +3,7 @@
 
 .upload-panel {
   @include surface;
+  background: var(--surface-raised);
   width: min(560px, 100%);
   max-height: 90vh;
   overflow-y: auto;
@@ -25,16 +26,16 @@
 
   &__drop {
     @include focus-ring;
-    border: 1.5px dashed $encre-35;
+    border: 1.5px dashed var(--text-faint);
     border-radius: $radius;
     padding: 2rem 1rem;
     text-align: center;
     cursor: pointer;
-    color: $encre-60;
+    color: var(--text-muted);
 
     &:hover {
-      border-color: $glacier;
-      background: $glacier-10;
+      border-color: var(--accent);
+      background: var(--accent-soft);
     }
   }
 
@@ -59,7 +60,7 @@
       gap: 1rem;
       font-size: 0.875rem;
       padding: 0.35rem 0.5rem;
-      background: $givre;
+      background: var(--bg);
       border-radius: $radius;
 
       span:first-child {
@@ -71,7 +72,7 @@
   &__size {
     font-family: $font-mono;
     font-size: 0.75rem;
-    color: $encre-60;
+    color: var(--text-muted);
     white-space: nowrap;
   }
 
@@ -86,7 +87,7 @@
   }
 
   &__error {
-    color: $balise;
+    color: var(--danger);
     font-size: 0.875rem;
   }
 }

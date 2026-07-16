@@ -6,8 +6,8 @@
   flex-direction: column;
   gap: 1.25rem;
   padding: 1.5rem 1.25rem;
-  background: $banquise;
-  border-right: 1px solid $encre-12;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
 
   &__brand {
     font-family: $font-display;
@@ -41,15 +41,15 @@
     padding: 0.4rem 0.6rem;
     border-radius: $radius;
     text-align: left;
-    color: $encre;
+    color: var(--text);
 
     &:hover {
-      background: $glacier-10;
+      background: var(--accent-soft);
     }
 
     &.is-active {
-      background: $glacier-10;
-      color: $glacier;
+      background: var(--accent-soft);
+      color: var(--accent);
       font-weight: 600;
     }
   }
@@ -57,7 +57,7 @@
   &__count {
     font-family: $font-mono;
     font-size: 0.75rem;
-    color: $encre-60;
+    color: var(--text-muted);
   }
 
   &__logout {
@@ -67,7 +67,7 @@
     padding: 0.4rem 0;
 
     &:hover {
-      color: $encre;
+      color: var(--text);
     }
   }
 }

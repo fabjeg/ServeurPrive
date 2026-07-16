@@ -9,12 +9,13 @@
 
   &__card {
     @include surface;
+    background: var(--surface-raised);
     width: min(380px, 100%);
     padding: 2rem;
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    box-shadow: $shadow-card;
+    box-shadow: var(--shadow-1);
   }
 
   // Le seul endroit (avec les états vides) où l'affichage prend de la place.
@@ -32,7 +33,7 @@
   }
 
   &__error {
-    color: $balise;
+    color: var(--danger);
     font-size: 0.875rem;
   }
 }

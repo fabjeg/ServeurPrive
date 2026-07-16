@@ -7,18 +7,18 @@
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: $encre-60;
+  color: var(--text-muted);
 }
 
 @mixin focus-ring {
   &:focus-visible {
-    outline: 2px solid $glacier;
+    outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
   }
 }
 
 @mixin surface {
-  background: $banquise;
-  border: 1px solid $encre-12;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: $radius;
 }

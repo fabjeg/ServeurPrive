@@ -13,12 +13,12 @@
   position: relative;
   display: flex;
   overflow: hidden;
-  box-shadow: $shadow-card;
+  box-shadow: var(--shadow-1);
   transition: transform 120ms ease, box-shadow 120ms ease;
 
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 0 2px 4px rgba($encre, 0.1), 0 8px 20px rgba($encre, 0.1);
+    box-shadow: var(--shadow-2);
   }
 
   // Bande de température : teinte froide dérivée de la catégorie (--strip-hue).
@@ -61,19 +61,19 @@
     font-size: 0.6875rem;
     padding: 0.1rem 0.45rem;
     border-radius: 999px;
-    background: $glacier-10;
-    color: $glacier;
+    background: var(--accent-soft);
+    color: var(--accent);
   }
 
   &__tag {
-    background: rgba($encre, 0.06);
-    color: $encre-60;
+    background: color-mix(in srgb, var(--text) 6%, transparent);
+    color: var(--text-muted);
   }
 
   &__actions {
     display: flex;
     flex-direction: column;
-    border-left: 1px dashed $encre-12;
+    border-left: 1px dashed var(--border);
   }
 
   &__action {
@@ -82,17 +82,17 @@
     display: grid;
     place-items: center;
     width: 2.4rem;
-    color: $encre-60;
+    color: var(--text-muted);
     font-size: 0.875rem;
 
     &:hover {
-      background: $glacier-10;
-      color: $glacier;
+      background: var(--accent-soft);
+      color: var(--accent);
     }
 
     &--danger:hover {
-      background: rgba($balise, 0.08);
-      color: $balise;
+      background: color-mix(in srgb, var(--danger) 8%, transparent);
+      color: var(--danger);
     }
   }
 }

@@ -8,12 +8,12 @@
   display: grid;
   place-items: center;
   padding: 1.5rem;
-  background: rgba($encre, 0.55);
+  background: var(--overlay);
   backdrop-filter: blur(2px);
 
   &--viewer {
     padding: 0;
-    background: $encre;
+    background: var(--surface-inverse);
   }
 
   &__close {

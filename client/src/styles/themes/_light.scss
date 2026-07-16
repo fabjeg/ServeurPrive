@@ -1,0 +1,35 @@
+@use "../abstracts/variables" as *;
+
+// Thème clair — source unique des couleurs consommées via var(--…).
+// Les 5 valeurs nommées (givre, banquise, encre, glacier, balise) vivent
+// dans abstracts/_variables.scss ; tout le reste en dérive ici.
+:root,
+[data-theme="light"] {
+  --bg: #{$givre};
+  --surface: #{$banquise};
+  --surface-raised: #{$banquise};
+  --border: #{rgba($encre, 0.12)};
+
+  --text: #{$encre};
+  --text-muted: #{rgba($encre, 0.6)};
+  --text-faint: #{rgba($encre, 0.35)};
+
+  --accent: #{$glacier};
+  --accent-hover: #2a729b; // glacier assombri (équivaut à brightness .92)
+  --accent-soft: #{rgba($glacier, 0.1)};
+  --accent-contrast: #{$banquise};
+
+  --danger: #{$balise};
+  --danger-on-inverse: #f0a58a; // balise éclaircie, lisible sur encre
+
+  // Zones inverses : Viewer et Scan gardent leur fond encre en thème clair.
+  --surface-inverse: #{$encre};
+  --text-on-inverse: #{$givre};
+  --overlay: #{rgba($encre, 0.55)};
+
+  --paper: #{$banquise}; // fond des documents rendus (canvas, iframe)
+
+  --shadow-1: 0 1px 2px #{rgba($encre, 0.08)}, 0 4px 12px #{rgba($encre, 0.06)};
+  --shadow-2: 0 2px 4px #{rgba($encre, 0.1)}, 0 8px 20px #{rgba($encre, 0.1)};
+  --focus-ring: #{$glacier};
+}
