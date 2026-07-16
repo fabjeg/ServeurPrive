@@ -1,0 +1,92 @@
+@use "../abstracts/variables" as *;
+@use "../abstracts/mixins" as *;
+
+.upload-panel {
+  @include surface;
+  width: min(560px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+
+  &__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    h2 {
+      font-family: $font-display;
+      font-size: 1.375rem;
+      font-weight: 600;
+    }
+  }
+
+  &__drop {
+    @include focus-ring;
+    border: 1.5px dashed $encre-35;
+    border-radius: $radius;
+    padding: 2rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    color: $encre-60;
+
+    &:hover {
+      border-color: $glacier;
+      background: $glacier-10;
+    }
+  }
+
+  &__hint {
+    @include stamp;
+    margin-top: 0.4rem;
+  }
+
+  &__camera {
+    width: 100%;
+    margin-top: -0.4rem; // groupé visuellement avec la zone de dépôt
+  }
+
+  &__files {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+
+    li {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      font-size: 0.875rem;
+      padding: 0.35rem 0.5rem;
+      background: $givre;
+      border-radius: $radius;
+
+      span:first-child {
+        overflow-wrap: anywhere;
+      }
+    }
+  }
+
+  &__size {
+    font-family: $font-mono;
+    font-size: 0.75rem;
+    color: $encre-60;
+    white-space: nowrap;
+  }
+
+  &__fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: $gap;
+
+    @media (max-width: 520px) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  &__error {
+    color: $balise;
+    font-size: 0.875rem;
+  }
+}

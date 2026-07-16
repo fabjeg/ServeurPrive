@@ -1,0 +1,19 @@
+@use "../abstracts/variables" as *;
+
+body {
+  font-family: $font-text;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: $encre;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  // L'affichage caractériel (Bricolage) est réservé aux moments sans enjeu :
+  // logotype, login, états vides. Les titres fonctionnels restent en Plex Sans.
+  font-family: $font-text;
+  font-weight: 600;
+  line-height: 1.2;
+}

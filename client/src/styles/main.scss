@@ -1,0 +1,24 @@
+// Frigo — architecture SCSS 7-1 (voir DESIGN.md pour le plan de design)
+@use "abstracts/variables";
+@use "abstracts/mixins";
+
+@use "vendors/fonts";
+
+@use "base/reset";
+@use "base/typography";
+@use "base/base";
+
+@use "layout/shell";
+@use "layout/sidebar";
+@use "layout/manifest";
+
+@use "components/buttons";
+@use "components/fields";
+@use "components/doc-card";
+@use "components/overlay";
+@use "components/upload-panel";
+@use "components/viewer";
+
+@use "pages/login";
+
+@use "themes/default";

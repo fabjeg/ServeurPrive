@@ -1,0 +1,98 @@
+@use "../abstracts/variables" as *;
+@use "../abstracts/mixins" as *;
+
+// Élément signature : la fiche de congélation.
+.doc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: $gap;
+}
+
+.doc-card {
+  @include surface;
+  position: relative;
+  display: flex;
+  overflow: hidden;
+  box-shadow: $shadow-card;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 4px rgba($encre, 0.1), 0 8px 20px rgba($encre, 0.1);
+  }
+
+  // Bande de température : teinte froide dérivée de la catégorie (--strip-hue).
+  &__strip {
+    flex: 0 0 6px;
+    background: hsl(var(--strip-hue, 200), 45%, 42%);
+  }
+
+  &__body {
+    @include focus-ring;
+    flex: 1;
+    padding: 0.9rem 1rem;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
+  }
+
+  &__stamp {
+    @include stamp;
+  }
+
+  &__name {
+    font-weight: 600;
+    font-size: 0.9375rem;
+    overflow-wrap: anywhere;
+  }
+
+  &__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: auto;
+  }
+
+  &__category,
+  &__tag {
+    font-family: $font-mono;
+    font-size: 0.6875rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    background: $glacier-10;
+    color: $glacier;
+  }
+
+  &__tag {
+    background: rgba($encre, 0.06);
+    color: $encre-60;
+  }
+
+  &__actions {
+    display: flex;
+    flex-direction: column;
+    border-left: 1px dashed $encre-12;
+  }
+
+  &__action {
+    @include focus-ring;
+    flex: 1;
+    display: grid;
+    place-items: center;
+    width: 2.4rem;
+    color: $encre-60;
+    font-size: 0.875rem;
+
+    &:hover {
+      background: $glacier-10;
+      color: $glacier;
+    }
+
+    &--danger:hover {
+      background: rgba($balise, 0.08);
+      color: $balise;
+    }
+  }
+}

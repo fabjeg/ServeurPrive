@@ -1,0 +1,34 @@
+@use "../abstracts/variables" as *;
+
+.shell {
+  display: grid;
+  grid-template-columns: $sidebar-width 1fr;
+  height: 100%;
+
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+}
+
+.shell__main {
+  overflow-y: auto;
+  padding: 1.5rem 2rem 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.grid-empty {
+  margin-top: 4rem;
+  text-align: center;
+  color: $encre-60;
+
+  &__title {
+    font-family: $font-display;
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: $encre;
+    margin-bottom: 0.5rem;
+  }
+}

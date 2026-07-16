@@ -1,0 +1,23 @@
+@use "../abstracts/variables" as *;
+@use "../abstracts/mixins" as *;
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+
+  &__label {
+    @include stamp;
+  }
+
+  input {
+    @include surface;
+    @include focus-ring;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.9375rem;
+
+    &::placeholder {
+      color: $encre-35;
+    }
+  }
+}

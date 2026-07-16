@@ -1,0 +1,12 @@
+node_modules/
+client/node_modules/
+client/dist/
+.vercel/
+.env
+.env.local
+.env*.local
+*.log
+.DS_Store
+
+.vercel
+.env.vercel

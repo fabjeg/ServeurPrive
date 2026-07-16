@@ -1,0 +1,46 @@
+@use "../abstracts/variables" as *;
+@use "../abstracts/mixins" as *;
+
+.btn {
+  @include focus-ring;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1rem;
+  border-radius: $radius;
+  border: 1px solid $encre-12;
+  background: $banquise;
+  font-weight: 500;
+  font-size: 0.875rem;
+
+  &:hover {
+    border-color: $encre-35;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  &--primary {
+    background: $glacier;
+    border-color: $glacier;
+    color: $banquise;
+
+    &:hover:not(:disabled) {
+      filter: brightness(0.92);
+      border-color: $glacier;
+    }
+  }
+
+  &--danger {
+    color: $balise;
+    border-color: rgba($balise, 0.4);
+
+    &:hover {
+      background: rgba($balise, 0.08);
+      border-color: $balise;
+    }
+  }
+}
