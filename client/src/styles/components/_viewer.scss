@@ -54,6 +54,7 @@
 
   &__stage {
     flex: 1;
+    min-height: 0; // sans ça, l'enfant flex garde la hauteur de son contenu et rien ne défile
     display: grid;
     place-items: center;
     overflow: auto;
@@ -78,6 +79,7 @@
     width: 100%;
     height: 100%;
     overflow-y: auto;
+    overscroll-behavior: contain;
 
     &__pages {
       display: flex;

@@ -13,6 +13,7 @@
     "@fontsource/ibm-plex-mono": "^5.2.5",
     "@fontsource/ibm-plex-sans": "^5.2.5",
     "@vercel/blob": "^2.6.1",
+    "frigo": "file:..",
     "jspdf": "^4.2.1",
     "pdfjs-dist": "^6.1.200",
     "react": "^18.3.1",
