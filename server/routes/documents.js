@@ -56,6 +56,7 @@ documentsRouter.post("/", async (req, res, next) => {
       category: category || "divers",
       tags: Array.isArray(tags) ? tags.filter(Boolean) : [],
       size: Number(size) || 0,
+      source: "web",
       blobPath,
       blobUrl,
     });

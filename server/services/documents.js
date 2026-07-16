@@ -1,5 +1,5 @@
 // Logique documentaire partagée entre l'API REST et les tools MCP.
-import { del } from "@vercel/blob";
+import { del, put } from "@vercel/blob";
 import { connectDb } from "../lib/db.js";
 import { env } from "../lib/env.js";
 import { Document } from "../models/Document.js";
@@ -40,6 +40,44 @@ export async function registerDocument(ownerId, meta) {
     { $setOnInsert: { ...meta, ownerId, uploadedAt: new Date() } },
     { upsert: true, new: true }
   );
+}
+
+// Dépôt côté serveur (tool MCP add_document) : mêmes règles que l'upload web —
+// blob privé, chemin documents/<owner>/ + suffixe aléatoire, métadonnées en Mongo.
+// Réservé aux petits fichiers : ici le contenu transite par la fonction serverless.
+export async function createDocumentFromBuffer(
+  ownerId,
+  { filename, mimetype, category, tags, buffer, source }
+) {
+  const blob = await put(`documents/${ownerId}/${filename}`, buffer, {
+    access: "private",
+    addRandomSuffix: true,
+    contentType: mimetype,
+    token: env.blobToken,
+  });
+  return registerDocument(ownerId, {
+    filename,
+    mimetype,
+    category: category || "divers",
+    tags: Array.isArray(tags) ? tags.filter(Boolean) : [],
+    size: buffer.length,
+    source: source || "web",
+    blobPath: blob.pathname,
+    blobUrl: blob.url,
+  });
+}
+
+// Mise à jour des métadonnées uniquement. Le blob n'est jamais déplacé : son
+// chemin porte un suffixe aléatoire et le nom affiché/téléchargé vient de
+// `filename` (Content-Disposition du proxy), pas du chemin de stockage.
+export async function updateDocument(ownerId, id, { filename, category, tags }) {
+  const doc = await getDocument(ownerId, id);
+  if (!doc) return null;
+  if (filename !== undefined) doc.filename = filename;
+  if (category !== undefined) doc.category = category;
+  if (tags !== undefined) doc.tags = tags.filter(Boolean);
+  await doc.save();
+  return doc;
 }
 
 export async function deleteDocument(ownerId, id) {

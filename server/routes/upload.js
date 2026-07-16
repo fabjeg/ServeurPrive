@@ -46,6 +46,7 @@ uploadRouter.post("/", async (req, res) => {
           category: meta.category || "divers",
           tags: Array.isArray(meta.tags) ? meta.tags : [],
           size: meta.size || 0,
+          source: "web",
           blobPath: blob.pathname,
           blobUrl: blob.url,
         });

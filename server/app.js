@@ -8,7 +8,9 @@ import { mcpRouter } from "./mcp/index.js";
 export const app = express();
 
 app.disable("x-powered-by");
-app.use(express.json({ limit: "1mb" })); // métadonnées et JSON-RPC uniquement — jamais de fichier
+// Métadonnées, JSON-RPC et le base64 du tool MCP add_document (≤ ~3 Mo de
+// fichier → ~4 Mo encodé). Les uploads web, eux, ne passent jamais par ici.
+app.use(express.json({ limit: "4.5mb" }));
 app.use(cookieParser());
 
 app.use("/api/auth", authRouter);

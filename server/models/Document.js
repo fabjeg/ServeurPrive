@@ -13,6 +13,8 @@ const documentSchema = new mongoose.Schema(
     blobUrl: { type: String, required: true },
     ownerId: { type: String, required: true, index: true },
     size: { type: Number, default: 0 },
+    // Origine du dépôt : interface web ou tool MCP (Claude).
+    source: { type: String, enum: ["web", "claude"], default: "web" },
     uploadedAt: { type: Date, default: Date.now },
   },
   { versionKey: false }
@@ -30,6 +32,7 @@ documentSchema.methods.toClient = function toClient() {
     category: this.category,
     tags: this.tags,
     size: this.size,
+    source: this.source,
     uploadedAt: this.uploadedAt,
   };
 };

@@ -7,9 +7,12 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { z } from "zod";
 import { requireMcpAuth, OWNER_ID } from "../lib/auth.js";
 import {
+  createDocumentFromBuffer,
+  deleteDocument,
   fetchBlobResponse,
   getDocument,
   listDocuments,
+  updateDocument,
 } from "../services/documents.js";
 
 const TEXT_MIMETYPES = /^(text\/|application\/(json|xml|javascript|x-yaml|csv))/;
@@ -17,6 +20,9 @@ const IMAGE_MIMETYPES = /^image\/(png|jpeg|gif|webp)$/;
 const MAX_INLINE_BYTES = 4 * 1024 * 1024;
 const MAX_PDF_BYTES = 20 * 1024 * 1024; // extraction texte seulement, jamais inline
 const MAX_TEXT_CHARS = 60000;
+// add_document : le contenu transite par la fonction serverless (plafond Vercel
+// 4,5 Mo) et le base64 gonfle de ~33 % → limite utile ~3 Mo de fichier décodé.
+const MAX_ADD_BYTES = 3 * 1024 * 1024;
 
 function docLine(d) {
   const kb = Math.round((d.size || 0) / 1024);
@@ -141,6 +147,121 @@ function buildServer() {
       return textResult(
         `${header}\n\n(Format binaire — contenu non extractible inline. Utilisez l'application Frigo pour le consulter.)`
       );
+    }
+  );
+
+  server.registerTool(
+    "add_document",
+    {
+      title: "Déposer un document",
+      description:
+        "Ajoute un document dans le coffre (contenu encodé en base64). " +
+        `Limite : ${Math.round(MAX_ADD_BYTES / 1024 / 1024)} Mo de fichier décodé — ` +
+        "au-delà, l'upload doit passer par l'interface web Frigo.",
+      inputSchema: {
+        filename: z.string().min(1).max(200).describe("Nom du fichier, extension comprise"),
+        mimetype: z
+          .string()
+          .regex(/^[\w.+-]+\/[\w.+-]+$/, "Type MIME invalide")
+          .describe("Type MIME (ex. application/pdf, image/png, text/plain)"),
+        content: z
+          .string()
+          .min(1)
+          .regex(/^[A-Za-z0-9+/]+={0,2}$/, "Le contenu doit être du base64 valide")
+          .describe("Contenu du fichier encodé en base64 (sans préfixe data:)"),
+        category: z.string().min(1).max(60).optional().describe("Catégorie (défaut : divers)"),
+        tags: z.array(z.string().min(1).max(40)).max(20).optional().describe("Tags"),
+      },
+    },
+    async ({ filename, mimetype, content, category, tags }) => {
+      const buffer = Buffer.from(content, "base64");
+      if (buffer.length === 0) {
+        return textResult("Contenu base64 vide ou indéchiffrable — document non créé.");
+      }
+      if (buffer.length > MAX_ADD_BYTES) {
+        return textResult(
+          `Fichier trop volumineux pour cette voie (${Math.round(buffer.length / 1024)} Ko décodés, ` +
+            `maximum ${Math.round(MAX_ADD_BYTES / 1024 / 1024)} Mo) : le contenu transite par une ` +
+            "fonction serverless limitée à 4,5 Mo. Utilise l'upload de l'interface web Frigo, " +
+            "qui envoie le fichier directement vers le stockage sans cette limite."
+        );
+      }
+      // Le nom sert de base au chemin blob : on neutralise les séparateurs
+      // pour rester sous documents/<owner>/ (même règle que l'upload web).
+      const safeName = filename.replace(/[/\\]/g, "_");
+      const doc = await createDocumentFromBuffer(OWNER_ID, {
+        filename: safeName,
+        mimetype,
+        category,
+        tags,
+        buffer,
+        source: "claude",
+      });
+      return textResult(`Document déposé dans le coffre :\n${docLine(doc)}`);
+    }
+  );
+
+  server.registerTool(
+    "update_document",
+    {
+      title: "Modifier un document",
+      description:
+        "Met à jour les métadonnées d'un document : nom de fichier, catégorie et/ou tags. " +
+        "Le fichier lui-même n'est pas modifié.",
+      inputSchema: {
+        id: z.string().describe("Identifiant du document (obtenu via list/search)"),
+        filename: z.string().min(1).max(200).optional().describe("Nouveau nom de fichier"),
+        category: z.string().min(1).max(60).optional().describe("Nouvelle catégorie"),
+        tags: z
+          .array(z.string().min(1).max(40))
+          .max(20)
+          .optional()
+          .describe("Nouvelle liste de tags (remplace l'existante)"),
+      },
+    },
+    async ({ id, filename, category, tags }) => {
+      if (filename === undefined && category === undefined && tags === undefined) {
+        return textResult("Aucun changement demandé : fournir filename, category et/ou tags.");
+      }
+      const doc = await updateDocument(OWNER_ID, id, {
+        filename: filename?.replace(/[/\\]/g, "_"),
+        category,
+        tags,
+      });
+      if (!doc) return textResult(`Document ${id} introuvable.`);
+      return textResult(`Document mis à jour :\n${docLine(doc)}`);
+    }
+  );
+
+  server.registerTool(
+    "delete_document",
+    {
+      title: "Supprimer un document",
+      description:
+        "Supprime DÉFINITIVEMENT un document (fichier + métadonnées). Action irréversible : " +
+        "ne JAMAIS l'appeler de ta propre initiative — uniquement après que l'utilisateur a " +
+        "confirmé explicitement la suppression de ce document précis dans la conversation.",
+      inputSchema: {
+        id: z.string().describe("Identifiant du document (obtenu via list/search)"),
+        confirmed: z
+          .boolean()
+          .describe(
+            "Doit être true, et seulement si l'utilisateur a explicitement confirmé la suppression"
+          ),
+      },
+    },
+    async ({ id, confirmed }) => {
+      if (confirmed !== true) {
+        return textResult(
+          "Suppression refusée : demande d'abord une confirmation explicite à l'utilisateur, " +
+            "puis rappelle ce tool avec confirmed: true."
+        );
+      }
+      const doc = await getDocument(OWNER_ID, id);
+      if (!doc) return textResult(`Document ${id} introuvable.`);
+      const filename = doc.filename;
+      await deleteDocument(OWNER_ID, id);
+      return textResult(`Document « ${filename} » supprimé définitivement (fichier + métadonnées).`);
     }
   );
 
