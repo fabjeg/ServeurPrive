@@ -5,13 +5,15 @@
 // dans abstracts/_variables.scss ; tout le reste en dérive ici.
 :root,
 [data-theme="light"] {
+  color-scheme: light;
+
   --bg: #{$givre};
   --surface: #{$banquise};
   --surface-raised: #{$banquise};
   --border: #{rgba($encre, 0.12)};
 
   --text: #{$encre};
-  --text-muted: #{rgba($encre, 0.6)};
+  --text-muted: #{rgba($encre, 0.68)}; // 0.6 échouait AA (3.94:1 sur blanc)
   --text-faint: #{rgba($encre, 0.35)};
 
   --accent: #{$glacier};

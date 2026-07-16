@@ -1,0 +1,37 @@
+@use "../abstracts/variables" as *;
+
+// Thème sombre — déclinaison pétrole de l'identité froide : fonds profonds
+// dérivés d'encre, texte givre, glacier et balise éclaircis pour tenir le
+// contraste AA sur fond sombre. Aucune nouvelle teinte.
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #0e1f27;
+  --surface: #14303c;
+  --surface-raised: #1a3a48;
+  --border: #{rgba($givre, 0.14)};
+
+  --text: #{$givre};
+  --text-muted: #{rgba($givre, 0.72)};
+  --text-faint: #{rgba($givre, 0.48)};
+
+  --accent: #64a9d1; // glacier éclairci
+  --accent-hover: #7fbadd;
+  --accent-soft: rgba(100, 169, 209, 0.14);
+  --accent-contrast: #0e1f27;
+
+  --danger: #ef7d4f; // balise éclaircie
+  --danger-on-inverse: #f0a58a;
+
+  // Le Viewer et le Scan restent les zones les plus sombres de l'écran,
+  // comme en clair ils sont les plus encrées.
+  --surface-inverse: #0b1a21;
+  --text-on-inverse: #{$givre};
+  --overlay: rgba(4, 14, 19, 0.65);
+
+  --paper: #{$banquise};
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 2px 4px rgba(0, 0, 0, 0.4), 0 8px 20px rgba(0, 0, 0, 0.4);
+  --focus-ring: #64a9d1;
+}
