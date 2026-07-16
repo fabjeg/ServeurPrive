@@ -12,6 +12,10 @@
   backdrop-filter: blur(2px);
 
   &--viewer {
+    // Pas de centrage grille ici : la hauteur 100% du .viewer doit se résoudre
+    // contre l'overlay (hauteur définie), pas contre une rangée auto dimensionnée
+    // par le contenu — sinon le viewer déborde et plus rien ne défile.
+    display: block;
     padding: 0;
     background: var(--surface-inverse);
   }
