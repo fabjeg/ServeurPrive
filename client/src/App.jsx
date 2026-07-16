@@ -6,8 +6,10 @@ import { SearchBar } from "./components/SearchBar.jsx";
 import { DocumentGrid } from "./components/DocumentGrid.jsx";
 import { UploadPanel } from "./components/UploadPanel.jsx";
 import { Viewer } from "./components/Viewer.jsx";
+import { useTheme } from "./hooks/useTheme.js";
 
 export function App() {
+  const { preference: themePreference, choosePreference: onChooseTheme } = useTheme();
   const [authState, setAuthState] = useState("checking"); // checking | anonymous | authenticated
   const [documents, setDocuments] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -71,6 +73,8 @@ export function App() {
         onSelectCategory={(category) => setFilters((f) => ({ ...f, category }))}
         onOpenUpload={() => setUploadOpen(true)}
         onLogout={handleLogout}
+        themePreference={themePreference}
+        onChooseTheme={onChooseTheme}
       />
       <main className="shell__main">
         <SearchBar filters={filters} onChange={setFilters} />

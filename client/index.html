@@ -11,6 +11,27 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Frigo" />
     <title>Frigo — chambre froide documentaire</title>
+    <script>
+      // Pose le thème avant le premier paint pour éviter tout flash.
+      // Doit rester synchrone et avant le module Vite.
+      (function () {
+        try {
+          var stored = localStorage.getItem("frigo:theme");
+          var theme =
+            stored === "light" || stored === "dark"
+              ? stored
+              : window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light";
+          document.documentElement.dataset.theme = theme;
+          if (theme === "dark") {
+            document
+              .querySelector('meta[name="theme-color"]')
+              .setAttribute("content", "#0e1f27");
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

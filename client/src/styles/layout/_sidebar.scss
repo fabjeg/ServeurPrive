@@ -60,6 +60,16 @@
     color: var(--text-muted);
   }
 
+  &__appearance {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+
+    .sidebar__heading {
+      margin-bottom: 0;
+    }
+  }
+
   &__logout {
     @include stamp;
     @include focus-ring;
@@ -68,6 +78,33 @@
 
     &:hover {
       color: var(--text);
+    }
+  }
+}
+
+.theme-switch {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: $radius;
+  padding: 2px;
+  gap: 2px;
+
+  &__option {
+    @include focus-ring;
+    flex: 1;
+    padding: 0.3rem 0.2rem;
+    border-radius: calc(#{$radius} - 2px);
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
+
+    &:hover {
+      color: var(--text);
+    }
+
+    &.is-selected {
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 500;
     }
   }
 }
