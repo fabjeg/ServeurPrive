@@ -44,7 +44,7 @@
 
   &__name {
     font-weight: 600;
-    font-size: 0.9375rem;
+    font-size: var(--fs-base);
     overflow-wrap: anywhere;
   }
 
@@ -58,7 +58,7 @@
   &__category,
   &__tag {
     font-family: $font-mono;
-    font-size: 0.6875rem;
+    font-size: var(--fs-xs);
     padding: 0.1rem 0.45rem;
     border-radius: 999px;
     background: var(--accent-soft);
@@ -83,7 +83,7 @@
     place-items: center;
     width: 2.4rem;
     color: var(--text-muted);
-    font-size: 0.875rem;
+    font-size: var(--fs-md);
 
     &:hover {
       background: var(--accent-soft);

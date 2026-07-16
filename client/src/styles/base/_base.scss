@@ -9,8 +9,8 @@ body {
   place-items: center;
   height: 100%;
   font-family: $font-display;
-  font-size: 2rem;
-  font-weight: 700;
+  font-size: var(--fs-xl);
+  font-weight: 600;
   letter-spacing: 0.2em;
   color: var(--text-faint);
 }

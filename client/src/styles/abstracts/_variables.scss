@@ -7,9 +7,9 @@ $encre: #14303c; // texte, encre pétrole
 $glacier: #2e7ca8; // actions primaires
 $balise: #c2410c; // destructif uniquement
 
-// Typographies
-$font-display: "Bricolage Grotesque Variable", sans-serif;
-$font-text: "IBM Plex Sans", sans-serif;
+// Typographies — Poppins pour tout le texte, Plex Mono pour les tampons.
+$font-display: "Poppins", sans-serif;
+$font-text: "Poppins", sans-serif;
 $font-mono: "IBM Plex Mono", monospace;
 
 // Rythme (invariant entre thèmes)

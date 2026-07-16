@@ -9,9 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@fontsource-variable/bricolage-grotesque": "^5.2.5",
     "@fontsource/ibm-plex-mono": "^5.2.5",
-    "@fontsource/ibm-plex-sans": "^5.2.5",
+    "@fontsource/poppins": "^5.2.7",
     "@vercel/blob": "^2.6.1",
     "frigo": "file:..",
     "jspdf": "^4.2.1",

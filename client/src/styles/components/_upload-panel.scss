@@ -19,7 +19,7 @@
 
     h2 {
       font-family: $font-display;
-      font-size: 1.375rem;
+      font-size: var(--fs-lg);
       font-weight: 600;
     }
   }
@@ -58,7 +58,7 @@
       display: flex;
       justify-content: space-between;
       gap: 1rem;
-      font-size: 0.875rem;
+      font-size: var(--fs-md);
       padding: 0.35rem 0.5rem;
       background: var(--bg);
       border-radius: $radius;
@@ -71,7 +71,7 @@
 
   &__size {
     font-family: $font-mono;
-    font-size: 0.75rem;
+    font-size: var(--fs-sm);
     color: var(--text-muted);
     white-space: nowrap;
   }
@@ -88,6 +88,6 @@
 
   &__error {
     color: var(--danger);
-    font-size: 0.875rem;
+    font-size: var(--fs-md);
   }
 }

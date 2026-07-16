@@ -3,7 +3,7 @@
 // Tampon d'inventaire : métadonnées en mono, petites capitales espacées.
 @mixin stamp {
   font-family: $font-mono;
-  font-size: 0.6875rem;
+  font-size: var(--fs-xs);
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;

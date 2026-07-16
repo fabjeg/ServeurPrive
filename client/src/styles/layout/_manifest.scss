@@ -15,7 +15,7 @@
     min-width: 240px;
     padding: 0.65rem 0.9rem;
     font-family: $font-mono;
-    font-size: 0.875rem;
+    font-size: var(--fs-md);
 
     &::placeholder {
       color: var(--text-faint);
@@ -41,7 +41,7 @@
       @include focus-ring;
       padding: 0.45rem 0.6rem;
       font-family: $font-mono;
-      font-size: 0.8125rem;
+      font-size: var(--fs-sm);
     }
   }
 }

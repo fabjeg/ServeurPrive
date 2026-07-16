@@ -1,0 +1,11 @@
+// Échelle typographique — seules tailles autorisées dans les composants.
+// Invariante entre thèmes (contrairement aux couleurs de themes/).
+:root {
+  --fs-xs: 0.6875rem; // tampons mono, étiquettes
+  --fs-sm: 0.8125rem; // métadonnées compactes (compteurs, dates, tailles)
+  --fs-md: 0.875rem; // boutons, texte secondaire
+  --fs-base: 0.9375rem; // corps de texte
+  --fs-lg: 1.375rem; // titres de panneaux, logotype sidebar
+  --fs-xl: 1.75rem; // titres d'états vides, splash
+  --fs-2xl: 2.5rem; // logotype login
+}

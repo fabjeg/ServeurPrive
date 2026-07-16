@@ -14,7 +14,7 @@
     @include surface;
     @include focus-ring;
     padding: 0.55rem 0.75rem;
-    font-size: 0.9375rem;
+    font-size: var(--fs-base);
 
     &::placeholder {
       color: var(--text-faint);

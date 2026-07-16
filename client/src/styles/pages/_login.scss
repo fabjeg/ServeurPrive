@@ -21,9 +21,9 @@
   // Le seul endroit (avec les états vides) où l'affichage prend de la place.
   &__brand {
     font-family: $font-display;
-    font-size: 2.5rem;
-    font-weight: 700;
-    letter-spacing: 0.01em;
+    font-size: var(--fs-2xl);
+    font-weight: 600;
+    letter-spacing: -0.01em;
     line-height: 1;
   }
 
@@ -34,6 +34,6 @@
 
   &__error {
     color: var(--danger);
-    font-size: 0.875rem;
+    font-size: var(--fs-md);
   }
 }
