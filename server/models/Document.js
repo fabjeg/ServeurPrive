@@ -15,6 +15,9 @@ const documentSchema = new mongoose.Schema(
     size: { type: Number, default: 0 },
     // Origine du dépôt : interface web ou tool MCP (Claude).
     source: { type: String, enum: ["web", "claude"], default: "web" },
+    // URL d'origine quand le document vient du web (traçabilité des dépôts IA).
+    sourceUrl: { type: String, default: "", trim: true },
+    description: { type: String, default: "", trim: true },
     uploadedAt: { type: Date, default: Date.now },
   },
   { versionKey: false }
@@ -33,6 +36,8 @@ documentSchema.methods.toClient = function toClient() {
     tags: this.tags,
     size: this.size,
     source: this.source,
+    sourceUrl: this.sourceUrl,
+    description: this.description,
     uploadedAt: this.uploadedAt,
   };
 };

@@ -23,6 +23,18 @@ const MAX_TEXT_CHARS = 60000;
 // add_document : le contenu transite par la fonction serverless (plafond Vercel
 // 4,5 Mo) et le base64 gonfle de ~33 % → limite utile ~3 Mo de fichier décodé.
 const MAX_ADD_BYTES = 3 * 1024 * 1024;
+// Liste blanche des types déposables via MCP : documents et notes uniquement.
+const ALLOWED_ADD_MIMETYPES = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+  "text/plain",
+  "text/markdown",
+  "text/csv",
+  "application/json",
+]);
 
 function docLine(d) {
   const kb = Math.round((d.size || 0) / 1024);
@@ -92,7 +104,9 @@ function buildServer() {
       const header =
         `Fichier : ${doc.filename}\nType : ${doc.mimetype}\nCatégorie : ${doc.category}\n` +
         `Tags : ${doc.tags.join(", ") || "—"}\nTaille : ${Math.round(doc.size / 1024)} Ko\n` +
-        `Ajouté le : ${doc.uploadedAt.toISOString()}`;
+        `Ajouté le : ${doc.uploadedAt.toISOString()}` +
+        (doc.description ? `\nDescription : ${doc.description}` : "") +
+        (doc.sourceUrl ? `\nSource : ${doc.sourceUrl}` : "");
 
       const isPdf = doc.mimetype === "application/pdf";
       if (doc.size > (isPdf ? MAX_PDF_BYTES : MAX_INLINE_BYTES)) {
@@ -157,7 +171,9 @@ function buildServer() {
       description:
         "Ajoute un document dans le coffre (contenu encodé en base64). " +
         `Limite : ${Math.round(MAX_ADD_BYTES / 1024 / 1024)} Mo de fichier décodé — ` +
-        "au-delà, l'upload doit passer par l'interface web Frigo.",
+        "au-delà, l'upload doit passer par l'interface web Frigo. " +
+        "Convention : catégorie et tags en minuscules, cohérents avec l'existant " +
+        "(ex. catégorie « xarios 600 », tag « schema electrique »).",
       inputSchema: {
         filename: z.string().min(1).max(200).describe("Nom du fichier, extension comprise"),
         mimetype: z
@@ -169,11 +185,33 @@ function buildServer() {
           .min(1)
           .regex(/^[A-Za-z0-9+/]+={0,2}$/, "Le contenu doit être du base64 valide")
           .describe("Contenu du fichier encodé en base64 (sans préfixe data:)"),
-        category: z.string().min(1).max(60).optional().describe("Catégorie (défaut : divers)"),
-        tags: z.array(z.string().min(1).max(40)).max(20).optional().describe("Tags"),
+        category: z
+          .string()
+          .min(1)
+          .max(60)
+          .optional()
+          .describe("Catégorie en minuscules, cohérente avec l'existant (défaut : divers)"),
+        tags: z
+          .array(z.string().min(1).max(40))
+          .max(20)
+          .optional()
+          .describe("Tags : mots-clés libres en minuscules"),
+        source_url: z
+          .string()
+          .url()
+          .max(2000)
+          .optional()
+          .describe("URL d'origine si le document vient du web (traçabilité)"),
+        description: z.string().max(500).optional().describe("Courte note libre"),
       },
     },
-    async ({ filename, mimetype, content, category, tags }) => {
+    async ({ filename, mimetype, content, category, tags, source_url, description }) => {
+      if (!ALLOWED_ADD_MIMETYPES.has(mimetype)) {
+        return textResult(
+          `Type MIME non autorisé (${mimetype}). Types acceptés : ` +
+            `${[...ALLOWED_ADD_MIMETYPES].join(", ")}.`
+        );
+      }
       const buffer = Buffer.from(content, "base64");
       if (buffer.length === 0) {
         return textResult("Contenu base64 vide ou indéchiffrable — document non créé.");
@@ -196,6 +234,8 @@ function buildServer() {
         tags,
         buffer,
         source: "claude",
+        sourceUrl: source_url,
+        description,
       });
       return textResult(`Document déposé dans le coffre :\n${docLine(doc)}`);
     }
@@ -206,27 +246,41 @@ function buildServer() {
     {
       title: "Modifier un document",
       description:
-        "Met à jour les métadonnées d'un document : nom de fichier, catégorie et/ou tags. " +
-        "Le fichier lui-même n'est pas modifié.",
+        "Met à jour les métadonnées d'un document : nom de fichier, catégorie, tags " +
+        "et/ou description. Le fichier lui-même n'est pas modifié.",
       inputSchema: {
         id: z.string().describe("Identifiant du document (obtenu via list/search)"),
         filename: z.string().min(1).max(200).optional().describe("Nouveau nom de fichier"),
-        category: z.string().min(1).max(60).optional().describe("Nouvelle catégorie"),
+        category: z
+          .string()
+          .min(1)
+          .max(60)
+          .optional()
+          .describe("Nouvelle catégorie (minuscules, cohérente avec l'existant)"),
         tags: z
           .array(z.string().min(1).max(40))
           .max(20)
           .optional()
           .describe("Nouvelle liste de tags (remplace l'existante)"),
+        description: z.string().max(500).optional().describe("Nouvelle note libre"),
       },
     },
-    async ({ id, filename, category, tags }) => {
-      if (filename === undefined && category === undefined && tags === undefined) {
-        return textResult("Aucun changement demandé : fournir filename, category et/ou tags.");
+    async ({ id, filename, category, tags, description }) => {
+      if (
+        filename === undefined &&
+        category === undefined &&
+        tags === undefined &&
+        description === undefined
+      ) {
+        return textResult(
+          "Aucun changement demandé : fournir filename, category, tags et/ou description."
+        );
       }
       const doc = await updateDocument(OWNER_ID, id, {
         filename: filename?.replace(/[/\\]/g, "_"),
         category,
         tags,
+        description,
       });
       if (!doc) return textResult(`Document ${id} introuvable.`);
       return textResult(`Document mis à jour :\n${docLine(doc)}`);

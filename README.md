@@ -106,8 +106,8 @@ Le serveur MCP est exposé sur `https://votre-app.vercel.app/api/mcp`
 | `list_documents` | Liste avec filtres optionnels `category` / `tag` / `limit` |
 | `search_documents` | Recherche par nom, tag ou catégorie |
 | `get_document_content` | Contenu d'un document par ID (texte intégral, **texte extrait des PDF**, image inline, ou métadonnées pour les autres binaires) |
-| `add_document` | Dépose un document (base64, ≤ 3 Mo — au-delà, passer par l'upload web) |
-| `update_document` | Modifie nom, catégorie et/ou tags d'un document |
+| `add_document` | Dépose un document (base64, ≤ 3 Mo, types MIME en liste blanche ; `source_url` et `description` optionnels pour la traçabilité) |
+| `update_document` | Modifie nom, catégorie, tags et/ou description d'un document |
 | `delete_document` | Supprime définitivement un document (confirmation utilisateur obligatoire) |
 
 Les documents déposés par Claude portent `source: "claude"` en base (les

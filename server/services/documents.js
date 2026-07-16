@@ -47,7 +47,7 @@ export async function registerDocument(ownerId, meta) {
 // Réservé aux petits fichiers : ici le contenu transite par la fonction serverless.
 export async function createDocumentFromBuffer(
   ownerId,
-  { filename, mimetype, category, tags, buffer, source }
+  { filename, mimetype, category, tags, buffer, source, sourceUrl, description }
 ) {
   const blob = await put(`documents/${ownerId}/${filename}`, buffer, {
     access: "private",
@@ -62,6 +62,8 @@ export async function createDocumentFromBuffer(
     tags: Array.isArray(tags) ? tags.filter(Boolean) : [],
     size: buffer.length,
     source: source || "web",
+    sourceUrl: sourceUrl || "",
+    description: description || "",
     blobPath: blob.pathname,
     blobUrl: blob.url,
   });
@@ -70,12 +72,13 @@ export async function createDocumentFromBuffer(
 // Mise à jour des métadonnées uniquement. Le blob n'est jamais déplacé : son
 // chemin porte un suffixe aléatoire et le nom affiché/téléchargé vient de
 // `filename` (Content-Disposition du proxy), pas du chemin de stockage.
-export async function updateDocument(ownerId, id, { filename, category, tags }) {
+export async function updateDocument(ownerId, id, { filename, category, tags, description }) {
   const doc = await getDocument(ownerId, id);
   if (!doc) return null;
   if (filename !== undefined) doc.filename = filename;
   if (category !== undefined) doc.category = category;
   if (tags !== undefined) doc.tags = tags.filter(Boolean);
+  if (description !== undefined) doc.description = description;
   await doc.save();
   return doc;
 }
