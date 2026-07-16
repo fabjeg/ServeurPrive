@@ -9,7 +9,7 @@ export function PdfViewer({ url, downloadUrl }) {
 
   useEffect(() => {
     let cancelled = false;
-    let pdfDoc = null;
+    let loadingTask = null;
 
     (async () => {
       try {
@@ -18,7 +18,8 @@ export function PdfViewer({ url, downloadUrl }) {
         pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
 
         // withCredentials : le proxy exige le cookie de session.
-        pdfDoc = await pdfjs.getDocument({ url, withCredentials: true }).promise;
+        loadingTask = pdfjs.getDocument({ url, withCredentials: true });
+        const pdfDoc = await loadingTask.promise;
         if (cancelled) return;
 
         const container = containerRef.current;
@@ -50,7 +51,13 @@ export function PdfViewer({ url, downloadUrl }) {
 
     return () => {
       cancelled = true;
-      pdfDoc?.destroy();
+      // destroy() vit sur la tâche de chargement (pas sur le document) et ne
+      // doit jamais faire échouer le démontage React → écran blanc sinon.
+      try {
+        Promise.resolve(loadingTask?.destroy()).catch(() => {});
+      } catch {
+        // rien : le document est déjà libéré
+      }
     };
   }, [url]);
 
