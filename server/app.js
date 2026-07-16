@@ -19,6 +19,11 @@ app.use("/api/mcp", mcpRouter); // jeton en Bearer (Claude Code, API)
 
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 
+// Les sondes de découverte OAuth (claude.ai, clients MCP) doivent recevoir un
+// vrai 404 — sinon le fallback SPA leur sert index.html en 200 et les clients
+// croient qu'un serveur OAuth existe, puis échouent à s'y enregistrer.
+app.use("/.well-known", (req, res) => res.status(404).json({ error: "Not found" }));
+
 app.use("/api", (req, res) => res.status(404).json({ error: "Route inconnue." }));
 
 // Gestion d'erreur centralisée : ne jamais fuiter de détails internes.
