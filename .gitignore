@@ -10,3 +10,4 @@ client/dist/
 
 .vercel
 .env.vercel
+totp-qr.png

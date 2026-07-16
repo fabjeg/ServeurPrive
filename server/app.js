@@ -14,7 +14,8 @@ app.use(cookieParser());
 app.use("/api/auth", authRouter);
 app.use("/api/upload", uploadRouter);
 app.use("/api/documents", documentsRouter);
-app.use("/api/mcp", mcpRouter);
+app.use("/api/mcp/:token", mcpRouter); // jeton dans l'URL (connecteur claude.ai)
+app.use("/api/mcp", mcpRouter); // jeton en Bearer (Claude Code, API)
 
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 

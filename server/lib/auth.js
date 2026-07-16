@@ -61,11 +61,13 @@ export function requireAuth(req, res, next) {
   next();
 }
 
-// Middleware du serveur MCP : jeton Bearer dédié (connecteur Claude).
+// Middleware du serveur MCP : jeton dédié (connecteur Claude), accepté soit
+// en Bearer (Claude Code, API), soit en segment d'URL /api/mcp/<token>
+// (claude.ai ne permet pas de header statique sur un connecteur personnalisé).
 // La règle "rien sans authentification" s'applique aussi ici.
 export function requireMcpAuth(req, res, next) {
   const header = req.headers.authorization || "";
-  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+  const token = header.startsWith("Bearer ") ? header.slice(7) : req.params?.token || null;
   if (!token || !timingSafeEqual(token, env.mcpAccessToken)) {
     return res.status(401).json({ error: "Jeton MCP invalide." });
   }

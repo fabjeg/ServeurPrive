@@ -15,6 +15,8 @@ import {
 const TEXT_MIMETYPES = /^(text\/|application\/(json|xml|javascript|x-yaml|csv))/;
 const IMAGE_MIMETYPES = /^image\/(png|jpeg|gif|webp)$/;
 const MAX_INLINE_BYTES = 4 * 1024 * 1024;
+const MAX_PDF_BYTES = 20 * 1024 * 1024; // extraction texte seulement, jamais inline
+const MAX_TEXT_CHARS = 60000;
 
 function docLine(d) {
   const kb = Math.round((d.size || 0) / 1024);
@@ -86,7 +88,8 @@ function buildServer() {
         `Tags : ${doc.tags.join(", ") || "—"}\nTaille : ${Math.round(doc.size / 1024)} Ko\n` +
         `Ajouté le : ${doc.uploadedAt.toISOString()}`;
 
-      if (doc.size > MAX_INLINE_BYTES) {
+      const isPdf = doc.mimetype === "application/pdf";
+      if (doc.size > (isPdf ? MAX_PDF_BYTES : MAX_INLINE_BYTES)) {
         return textResult(
           `${header}\n\n(Fichier trop volumineux pour être retourné inline — consultez-le dans l'application Frigo.)`
         );
@@ -94,6 +97,33 @@ function buildServer() {
 
       const blobRes = await fetchBlobResponse(doc);
       if (!blobRes.ok) return textResult(`${header}\n\n(Contenu inaccessible dans le stockage.)`);
+
+      if (isPdf) {
+        const { PDFParse } = await import("pdf-parse");
+        const buf = new Uint8Array(await blobRes.arrayBuffer());
+        let parser;
+        try {
+          parser = new PDFParse({ data: buf });
+          const parsed = await parser.getText();
+          let text = (parsed.text || "").trim();
+          if (!text) {
+            return textResult(
+              `${header}\nPages : ${parsed.total}\n\n(PDF sans couche texte — probablement un scan. Le contenu n'est pas extractible sans OCR.)`
+            );
+          }
+          const truncated = text.length > MAX_TEXT_CHARS;
+          if (truncated) text = text.slice(0, MAX_TEXT_CHARS);
+          return textResult(
+            `${header}\nPages : ${parsed.total}\n\n--- Contenu extrait ---\n${text}${
+              truncated ? "\n\n[… texte tronqué à 60 000 caractères]" : ""
+            }`
+          );
+        } catch {
+          return textResult(`${header}\n\n(PDF illisible — extraction de texte impossible.)`);
+        } finally {
+          await parser?.destroy().catch(() => {});
+        }
+      }
 
       if (TEXT_MIMETYPES.test(doc.mimetype)) {
         const text = await blobRes.text();
@@ -117,7 +147,8 @@ function buildServer() {
   return server;
 }
 
-export const mcpRouter = Router();
+// mergeParams : récupère :token quand le routeur est monté sur /api/mcp/:token
+export const mcpRouter = Router({ mergeParams: true });
 mcpRouter.use(requireMcpAuth);
 
 // Mode stateless : un serveur + un transport par requête, pas de session.

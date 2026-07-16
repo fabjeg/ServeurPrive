@@ -105,7 +105,15 @@ Le serveur MCP est exposé sur `https://votre-app.vercel.app/api/mcp`
 |------|-------------|
 | `list_documents` | Liste avec filtres optionnels `category` / `tag` / `limit` |
 | `search_documents` | Recherche par nom, tag ou catégorie |
-| `get_document_content` | Contenu d'un document par ID (texte intégral, image inline, ou métadonnées pour les binaires) |
+| `get_document_content` | Contenu d'un document par ID (texte intégral, **texte extrait des PDF**, image inline, ou métadonnées pour les autres binaires) |
+
+Deux modes d'authentification :
+
+- **Bearer** (`Authorization: Bearer <MCP_ACCESS_TOKEN>`) — pour Claude Code
+  (`claude mcp add --transport http frigo <url> --header "Authorization: Bearer …"`) et les appels API.
+- **Jeton dans l'URL** — `https://votre-app.vercel.app/api/mcp/<MCP_ACCESS_TOKEN>` —
+  pour claude.ai/Claude Desktop, qui ne permettent pas de header statique sur un
+  connecteur personnalisé. L'URL contient le secret : ne la partagez jamais.
 
 ### Enregistrement comme connecteur personnalisé
 
