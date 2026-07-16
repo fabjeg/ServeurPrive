@@ -2,62 +2,85 @@ import { useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
 import { api } from "../api.js";
 import { formatSize } from "./DocumentCard.jsx";
+import { ScanReview } from "./ScanReview.jsx";
+import { useBackClose } from "../hooks/useBackClose.js";
 
 const OWNER_PREFIX = "documents/owner";
 
+function stamp() {
+  return new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
+}
+
+// Assemble les pages scannées en un seul PDF A4 (chargé à la demande).
+async function buildScanPdf(pages) {
+  const { jsPDF } = await import("jspdf");
+  const pdf = new jsPDF({ unit: "mm", format: "a4", compress: true });
+  const pageW = 210;
+  const pageH = 297;
+  const margin = 6;
+  pages.forEach((page, i) => {
+    if (i > 0) pdf.addPage();
+    const ratio = Math.min((pageW - 2 * margin) / page.width, (pageH - 2 * margin) / page.height);
+    const w = page.width * ratio;
+    const h = page.height * ratio;
+    pdf.addImage(page.dataUrl, "JPEG", (pageW - w) / 2, (pageH - h) / 2, w, h);
+  });
+  const blob = pdf.output("blob");
+  return new File([blob], `scan-${stamp()}.pdf`, { type: "application/pdf" });
+}
+
 export function UploadPanel({ onClose, onUploaded }) {
   const [files, setFiles] = useState([]);
+  const [scanPages, setScanPages] = useState([]);
+  const [reviewFile, setReviewFile] = useState(null);
   const [category, setCategory] = useState("");
   const [tags, setTags] = useState("");
-  const [progress, setProgress] = useState(null); // { index, percent }
+  const [progress, setProgress] = useState(null); // { label, percent }
   const [error, setError] = useState("");
   const inputRef = useRef(null);
   const cameraRef = useRef(null);
 
-  const addFiles = (list) => setFiles((prev) => [...prev, ...Array.from(list)]);
+  useBackClose(onClose);
 
-  // Les photos prises à la volée arrivent souvent nommées "image.jpg" :
-  // on les renomme avec un horodatage pour les retrouver dans l'inventaire.
-  const addScans = (list) => {
-    const scans = Array.from(list).map((file) => {
-      const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
-      const ext = (file.name.match(/\.\w+$/) || [".jpg"])[0];
-      return new File([file], `scan-${stamp}${ext}`, { type: file.type });
+  const addFiles = (list) => setFiles((prev) => [...prev, ...Array.from(list)]);
+  const openCamera = () => cameraRef.current?.click();
+
+  const hasContent = files.length > 0 || scanPages.length > 0;
+
+  const uploadOne = async (file, meta) => {
+    // Upload direct client → Blob privé (jeton signé par /api/upload après
+    // vérification de session) : jamais via une fonction serverless.
+    const blob = await upload(`${OWNER_PREFIX}/${file.name}`, file, {
+      access: "private",
+      handleUploadUrl: "/api/upload",
+      clientPayload: JSON.stringify(meta),
+      onUploadProgress: ({ percentage }) =>
+        setProgress({ label: file.name, percent: Math.round(percentage) }),
     });
-    setFiles((prev) => [...prev, ...scans]);
+    await api.registerDocument({ ...meta, blobPath: blob.pathname, blobUrl: blob.url });
   };
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!files.length) return;
+    if (!hasContent || progress) return;
     setError("");
     const tagList = tags.split(",").map((t) => t.trim()).filter(Boolean);
+    const cat = category.trim().toLowerCase() || "divers";
 
     try {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        setProgress({ index: i, percent: 0 });
-        const meta = {
+      const queue = [...files];
+      if (scanPages.length) {
+        setProgress({ label: "Assemblage du scan…", percent: 0 });
+        queue.push(await buildScanPdf(scanPages));
+      }
+      for (const file of queue) {
+        await uploadOne(file, {
           filename: file.name,
           mimetype: file.type || "application/octet-stream",
-          category: category.trim().toLowerCase() || "divers",
+          category: cat,
           tags: tagList,
           size: file.size,
-        };
-        // Upload direct client → Blob (jeton signé par /api/upload après
-        // vérification de session) : le fichier ne transite jamais par une
-        // fonction serverless (limite 4,5 Mo).
-        const blob = await upload(`${OWNER_PREFIX}/${file.name}`, file, {
-          access: "private",
-          handleUploadUrl: "/api/upload",
-          clientPayload: JSON.stringify(meta),
-          onUploadProgress: ({ percentage }) =>
-            setProgress({ index: i, percent: Math.round(percentage) }),
         });
-        // Confirmation explicite : enregistre les métadonnées en Mongo
-        // (le callback onUploadCompleted ne joint pas localhost ; l'upsert
-        // serveur déduplique en production).
-        await api.registerDocument({ ...meta, blobPath: blob.pathname, blobUrl: blob.url });
       }
       onUploaded();
     } catch (err) {
@@ -98,12 +121,8 @@ export function UploadPanel({ onClose, onUploaded }) {
           />
         </div>
 
-        <button
-          type="button"
-          className="btn upload-panel__camera"
-          onClick={() => cameraRef.current?.click()}
-        >
-          📷 Scanner avec l'appareil photo
+        <button type="button" className="btn upload-panel__camera" onClick={openCamera}>
+          📷 {scanPages.length ? "Scanner la page suivante" : "Scanner un document"}
         </button>
         {/* capture="environment" : ouvre directement la caméra arrière sur mobile */}
         <input
@@ -113,21 +132,37 @@ export function UploadPanel({ onClose, onUploaded }) {
           capture="environment"
           hidden
           onChange={(e) => {
-            addScans(e.target.files);
-            e.target.value = ""; // permet de scanner plusieurs pages d'affilée
+            if (e.target.files[0]) setReviewFile(e.target.files[0]);
+            e.target.value = "";
           }}
         />
+
+        {scanPages.length > 0 && (
+          <div className="upload-panel__scan-strip">
+            {scanPages.map((p, i) => (
+              <div key={i} className="upload-panel__scan-thumb">
+                <img src={p.dataUrl} alt={`Page ${i + 1}`} />
+                <button
+                  type="button"
+                  aria-label={`Retirer la page ${i + 1}`}
+                  onClick={() => setScanPages((prev) => prev.filter((_, j) => j !== i))}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            <p className="upload-panel__scan-note">
+              {scanPages.length} page{scanPages.length > 1 ? "s" : ""} → un seul PDF
+            </p>
+          </div>
+        )}
 
         {files.length > 0 && (
           <ul className="upload-panel__files">
             {files.map((f, i) => (
               <li key={`${f.name}-${i}`}>
                 <span>{f.name}</span>
-                <span className="upload-panel__size">
-                  {progress && progress.index === i
-                    ? `${progress.percent}%`
-                    : formatSize(f.size)}
-                </span>
+                <span className="upload-panel__size">{formatSize(f.size)}</span>
               </li>
             ))}
           </ul>
@@ -156,10 +191,25 @@ export function UploadPanel({ onClose, onUploaded }) {
 
         {error && <p className="upload-panel__error">{error}</p>}
 
-        <button className="btn btn--primary" type="submit" disabled={!files.length || !!progress}>
+        <button className="btn btn--primary" type="submit" disabled={!hasContent || !!progress}>
           {progress ? `Congélation… ${progress.percent}%` : "Congeler"}
         </button>
       </form>
+
+      {reviewFile && (
+        <ScanReview
+          file={reviewFile}
+          onValidate={(page) => {
+            setScanPages((prev) => [...prev, page]);
+            setReviewFile(null);
+          }}
+          onRetake={() => {
+            setReviewFile(null);
+            openCamera();
+          }}
+          onCancel={() => setReviewFile(null)}
+        />
+      )}
     </div>
   );
 }

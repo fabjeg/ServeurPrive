@@ -1,5 +1,7 @@
 import { api } from "../api.js";
 import { formatDate, formatSize } from "./DocumentCard.jsx";
+import { PdfViewer } from "./PdfViewer.jsx";
+import { useBackClose } from "../hooks/useBackClose.js";
 
 // Viewer multi-format : s'adapte au mimetype. Toutes les sources pointent vers
 // la route proxy authentifiée — jamais d'URL Blob directe.
@@ -8,6 +10,8 @@ export function Viewer({ doc, onClose, onDelete }) {
   const isImage = doc.mimetype.startsWith("image/");
   const isPdf = doc.mimetype === "application/pdf";
   const isText = doc.mimetype.startsWith("text/");
+
+  useBackClose(onClose);
 
   return (
     <div className="overlay overlay--viewer" role="dialog" aria-modal="true" aria-label={doc.filename}>
@@ -34,7 +38,7 @@ export function Viewer({ doc, onClose, onDelete }) {
 
         <div className="viewer__stage">
           {isImage && <img src={fileUrl} alt={doc.filename} />}
-          {isPdf && <iframe src={fileUrl} title={doc.filename} />}
+          {isPdf && <PdfViewer url={fileUrl} downloadUrl={api.downloadUrl(doc.id)} />}
           {isText && <iframe src={fileUrl} title={doc.filename} className="viewer__text" />}
           {!isImage && !isPdf && !isText && (
             <div className="viewer__fallback">
