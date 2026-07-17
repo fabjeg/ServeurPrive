@@ -7,8 +7,10 @@ import { useBackClose } from "../hooks/useBackClose.js";
 
 // Explorateur des dossiers de l'application : niveau racine (recherche +
 // liste des dossiers), puis navigation dans un dossier pour voir ses
-// documents avant de le choisir comme destination d'upload.
-export function FolderBrowser({ folders = [], selectedId, onSelect, onClose }) {
+// documents avant de le choisir comme destination d'upload. Si onPickDoc est
+// fourni, un document existant peut aussi être sélectionné (rangé dans la
+// destination courante).
+export function FolderBrowser({ folders = [], selectedId, onSelect, onClose, onPickDoc }) {
   const [query, setQuery] = useState("");
   // null = racine ; { id, name } = dossier ouvert (id "" = non classés).
   const [open, setOpen] = useState(null);
@@ -44,6 +46,8 @@ export function FolderBrowser({ folders = [], selectedId, onSelect, onClose }) {
     onSelect(open.id);
     onClose();
   };
+  // Sélection d'un document existant, sauf s'il est déjà dans la destination.
+  const canPick = onPickDoc && open && open.id !== selectedId;
 
   return (
     <div
@@ -130,15 +134,25 @@ export function FolderBrowser({ folders = [], selectedId, onSelect, onClose }) {
                 </p>
               )}
               {visibleDocs?.map((d) => (
-                <button
-                  key={d.id}
-                  type="button"
-                  className="folder-browser__doc"
-                  onClick={() => setPreviewDoc(d)}
-                >
-                  <span className="folder-browser__doc-name">{d.filename}</span>
-                  <span className="folder-picker__count">{formatSize(d.size)}</span>
-                </button>
+                <div key={d.id} className="folder-browser__doc">
+                  <button
+                    type="button"
+                    className="folder-browser__doc-open"
+                    onClick={() => setPreviewDoc(d)}
+                  >
+                    <span className="folder-browser__doc-name">{d.filename}</span>
+                    <span className="folder-picker__count">{formatSize(d.size)}</span>
+                  </button>
+                  {canPick && (
+                    <button
+                      type="button"
+                      className="folder-browser__doc-pick"
+                      onClick={() => onPickDoc(d)}
+                    >
+                      Choisir
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
             <button type="button" className="btn btn--primary" onClick={choose}>
@@ -148,7 +162,13 @@ export function FolderBrowser({ folders = [], selectedId, onSelect, onClose }) {
         )}
       </div>
 
-      {previewDoc && <Viewer doc={previewDoc} onClose={() => setPreviewDoc(null)} />}
+      {previewDoc && (
+        <Viewer
+          doc={previewDoc}
+          onClose={() => setPreviewDoc(null)}
+          action={canPick ? { label: "Choisir ce document", onClick: () => onPickDoc(previewDoc) } : undefined}
+        />
+      )}
     </div>
   );
 }

@@ -187,7 +187,15 @@
   }
 
   &__doc {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  &__doc-open {
     @include focus-ring;
+    flex: 1;
+    min-width: 0;
     display: flex;
     align-items: center;
     gap: 0.6rem;
@@ -196,6 +204,20 @@
     font-size: var(--fs-md);
     text-align: left;
     color: var(--text);
+
+    &:hover {
+      background: var(--accent-soft);
+    }
+  }
+
+  &__doc-pick {
+    @include focus-ring;
+    flex-shrink: 0;
+    padding: 0.35rem 0.6rem;
+    border-radius: calc(#{$radius} - 2px);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--accent);
 
     &:hover {
       background: var(--accent-soft);

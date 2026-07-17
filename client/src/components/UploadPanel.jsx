@@ -52,6 +52,18 @@ export function UploadPanel({ folders = [], initialFolderId, onClose, onUploaded
   const hasContent = files.length > 0 || scanPages.length > 0;
   const selectedFolder = folders.find((f) => f.id === folderId);
 
+  // Sélection d'un document existant dans l'explorateur : on le range dans
+  // le dossier de destination courant (pas de nouvel upload).
+  const pickExisting = async (doc) => {
+    try {
+      await api.updateDocument(doc.id, { folderId: folderId || "" });
+      onUploaded();
+    } catch (err) {
+      setBrowsingFolders(false);
+      setError(err.message || "Impossible de déplacer le document.");
+    }
+  };
+
   const uploadOne = async (file, meta) => {
     // Upload direct client → Blob privé (jeton signé par /api/upload après
     // vérification de session) : jamais via une fonction serverless.
@@ -96,10 +108,10 @@ export function UploadPanel({ folders = [], initialFolderId, onClose, onUploaded
   };
 
   return (
-    <div className="overlay" role="dialog" aria-modal="true" aria-label="Mettre au froid">
+    <div className="overlay" role="dialog" aria-modal="true" aria-label="Ajouter des documents">
       <form className="upload-panel" onSubmit={submit}>
         <div className="upload-panel__head">
-          <h2>Mettre au froid</h2>
+          <h2>Ajouter des documents</h2>
           <button type="button" className="overlay__close" onClick={onClose} aria-label="Fermer">
             ✕
           </button>
@@ -215,7 +227,7 @@ export function UploadPanel({ folders = [], initialFolderId, onClose, onUploaded
         {error && <p className="upload-panel__error">{error}</p>}
 
         <button className="btn btn--primary" type="submit" disabled={!hasContent || !!progress}>
-          {progress ? `Congélation… ${progress.percent}%` : "Congeler"}
+          {progress ? `Envoi… ${progress.percent}%` : "Envoyer"}
         </button>
       </form>
 
@@ -225,6 +237,7 @@ export function UploadPanel({ folders = [], initialFolderId, onClose, onUploaded
           selectedId={folderId}
           onSelect={setFolderId}
           onClose={() => setBrowsingFolders(false)}
+          onPickDoc={pickExisting}
         />
       )}
 

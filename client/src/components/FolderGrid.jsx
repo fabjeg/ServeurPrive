@@ -15,7 +15,7 @@ function FolderCard({ folder, onOpen }) {
             </span>
           </span>
           <span className="folder-card__desc">
-            {folder.description || "Référentiel unique du modèle"}
+            {folder.description || "Dossier de documents"}
           </span>
           {folder.interventionCount > 0 && (
             <span className="folder-card__meta">
@@ -34,19 +34,19 @@ function FolderCard({ folder, onOpen }) {
 
 export function FolderGrid({ folders, unfiledCount, loading, onOpen, onOpenUnfiled, onCreate }) {
   if (loading && !folders.length) {
-    return <p className="grid-empty">Ouverture du compartiment…</p>;
+    return <p className="grid-empty">Chargement…</p>;
   }
   return (
     <section>
       <div className="folder-grid__head">
-        <h2 className="folder-grid__title">Modèles de frigo</h2>
+        <h2 className="folder-grid__title">Dossiers</h2>
         <button className="btn" onClick={onCreate}>
           + Nouveau dossier
         </button>
       </div>
       {!folders.length && !unfiledCount ? (
         <div className="grid-empty">
-          <p className="grid-empty__title">Compartiment vide</p>
+          <p className="grid-empty__title">Aucun dossier</p>
           <p>Créer un dossier par modèle (ex. « carrier xarios 200 ») pour y ranger ses docs.</p>
         </div>
       ) : (

@@ -31,8 +31,8 @@ export function LoginScreen({ onSuccess }) {
   return (
     <div className="login">
       <form className="login__card" onSubmit={submit}>
-        <p className="login__brand">Frigo</p>
-        <p className="login__tagline">Chambre froide documentaire — accès réservé.</p>
+        <p className="login__brand">Private Server</p>
+        <p className="login__tagline">Serveur de documents privé — accès réservé.</p>
 
         <label className="field">
           <span className="field__label">Email</span>

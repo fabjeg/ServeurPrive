@@ -98,7 +98,7 @@ export function App() {
   };
 
   if (authState === "checking") {
-    return <div className="app-loading">FRIGO</div>;
+    return <div className="app-loading">PRIVATE SERVER</div>;
   }
   if (authState === "anonymous") {
     return <LoginScreen onSuccess={() => setAuthState("authenticated")} />;

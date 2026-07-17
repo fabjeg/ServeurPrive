@@ -16,7 +16,7 @@ export function SearchBar({ filters, onChange }) {
       <input
         className="manifest__search"
         type="search"
-        placeholder="Rechercher dans l'inventaire…"
+        placeholder="Rechercher un document…"
         value={q}
         onChange={(e) => setQ(e.target.value)}
         aria-label="Recherche"

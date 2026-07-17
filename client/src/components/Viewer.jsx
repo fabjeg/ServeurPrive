@@ -5,7 +5,7 @@ import { useBackClose } from "../hooks/useBackClose.js";
 
 // Viewer multi-format : s'adapte au mimetype. Toutes les sources pointent vers
 // la route proxy authentifiée — jamais d'URL Blob directe.
-export function Viewer({ doc, onClose, onDelete }) {
+export function Viewer({ doc, onClose, onDelete, action }) {
   const fileUrl = api.fileUrl(doc.id);
   const isImage = doc.mimetype.startsWith("image/");
   const isPdf = doc.mimetype === "application/pdf";
@@ -24,6 +24,11 @@ export function Viewer({ doc, onClose, onDelete }) {
             </p>
           </div>
           <div className="viewer__actions">
+            {action && (
+              <button className="btn btn--primary" onClick={action.onClick}>
+                {action.label}
+              </button>
+            )}
             <a className="btn" href={api.downloadUrl(doc.id)}>
               Télécharger
             </a>

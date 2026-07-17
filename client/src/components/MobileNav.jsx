@@ -10,7 +10,7 @@ function MobileMenu({ onClose, onLogout, themePreference, onChooseTheme }) {
     <div className="overlay overlay--sheet" role="dialog" aria-modal="true" aria-label="Menu" onClick={onClose}>
       <div className="mobile-menu" onClick={(e) => e.stopPropagation()}>
         <div className="mobile-menu__head">
-          <p className="mobile-menu__brand">Frigo</p>
+          <p className="mobile-menu__brand">Private Server</p>
           <button type="button" className="overlay__close" onClick={onClose} aria-label="Fermer">
             ✕
           </button>

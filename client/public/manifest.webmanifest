@@ -1,7 +1,7 @@
 {
-  "name": "Frigo — chambre froide documentaire",
-  "short_name": "Frigo",
-  "description": "Coffre-fort personnel de documents professionnels",
+  "name": "Private Server — documents privés",
+  "short_name": "Private Server",
+  "description": "Serveur personnel de documents privés",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

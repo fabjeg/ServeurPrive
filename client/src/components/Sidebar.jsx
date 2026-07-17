@@ -56,10 +56,10 @@ export function Sidebar({
 
   return (
     <aside className="sidebar">
-      <p className="sidebar__brand">Frigo</p>
+      <p className="sidebar__brand">Private Server</p>
 
       <button className="btn btn--primary sidebar__upload" onClick={onOpenUpload}>
-        + Mettre au froid
+        + Ajouter un document
       </button>
 
       <nav className="sidebar__nav" aria-label="Dossiers">
@@ -68,7 +68,7 @@ export function Sidebar({
           className={`sidebar__item ${!activeFolderId ? "is-active" : ""}`}
           onClick={onSelectHome}
         >
-          <span>Tous les modèles</span>
+          <span>Tous les dossiers</span>
           <span className="sidebar__count">{total}</span>
         </button>
         {folders.map((f) => (
