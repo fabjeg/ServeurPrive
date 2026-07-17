@@ -8,10 +8,16 @@ function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export async function listDocuments(ownerId, { category, tag, q, from, to, limit = 200 } = {}) {
+export async function listDocuments(
+  ownerId,
+  { category, tag, q, from, to, folder, limit = 200 } = {}
+) {
   await connectDb();
   const filter = { ownerId };
   if (category) filter.category = category.toLowerCase();
+  // folder : "none" = documents non classés, sinon id de dossier.
+  if (folder === "none") filter.folderId = null;
+  else if (folder && /^[0-9a-fA-F]{24}$/.test(folder)) filter.folderId = folder;
   if (tag) filter.tags = tag;
   if (q) {
     const rx = new RegExp(escapeRegex(q), "i");
@@ -47,7 +53,7 @@ export async function registerDocument(ownerId, meta) {
 // Réservé aux petits fichiers : ici le contenu transite par la fonction serverless.
 export async function createDocumentFromBuffer(
   ownerId,
-  { filename, mimetype, category, tags, buffer, source, sourceUrl, description }
+  { filename, mimetype, category, tags, buffer, source, sourceUrl, description, folderId }
 ) {
   const blob = await put(`documents/${ownerId}/${filename}`, buffer, {
     access: "private",
@@ -64,6 +70,7 @@ export async function createDocumentFromBuffer(
     source: source || "web",
     sourceUrl: sourceUrl || "",
     description: description || "",
+    folderId: folderId || null,
     blobPath: blob.pathname,
     blobUrl: blob.url,
   });
@@ -72,13 +79,19 @@ export async function createDocumentFromBuffer(
 // Mise à jour des métadonnées uniquement. Le blob n'est jamais déplacé : son
 // chemin porte un suffixe aléatoire et le nom affiché/téléchargé vient de
 // `filename` (Content-Disposition du proxy), pas du chemin de stockage.
-export async function updateDocument(ownerId, id, { filename, category, tags, description }) {
+export async function updateDocument(
+  ownerId,
+  id,
+  { filename, category, tags, description, folderId }
+) {
   const doc = await getDocument(ownerId, id);
   if (!doc) return null;
   if (filename !== undefined) doc.filename = filename;
   if (category !== undefined) doc.category = category;
   if (tags !== undefined) doc.tags = tags.filter(Boolean);
   if (description !== undefined) doc.description = description;
+  // folderId : null pour détacher, ObjectId (déjà validé par l'appelant) sinon.
+  if (folderId !== undefined) doc.folderId = folderId;
   await doc.save();
   return doc;
 }

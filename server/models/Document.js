@@ -7,6 +7,8 @@ const documentSchema = new mongoose.Schema(
     mimetype: { type: String, required: true },
     category: { type: String, default: "divers", trim: true, lowercase: true },
     tags: { type: [String], default: [] },
+    // Dossier (modèle de frigo) auquel le document est rattaché — optionnel.
+    folderId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
     // Chemin/URL du blob privé. Jamais renvoyé au client : la consultation
     // passe toujours par la route proxy authentifiée.
     blobPath: { type: String, required: true, unique: true },
@@ -34,6 +36,7 @@ documentSchema.methods.toClient = function toClient() {
     mimetype: this.mimetype,
     category: this.category,
     tags: this.tags,
+    folderId: this.folderId ? this.folderId.toString() : null,
     size: this.size,
     source: this.source,
     sourceUrl: this.sourceUrl,

@@ -1,0 +1,117 @@
+@use "../abstracts/variables" as *;
+@use "../abstracts/mixins" as *;
+
+.folder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: $gap;
+
+  &__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  &__title {
+    font-family: $font-display;
+    font-size: var(--fs-xl);
+    font-weight: 600;
+  }
+}
+
+// Carte dossier : tuile arrondie avec pastille d'icône, badge de compteur
+// et chevron — la porte du compartiment d'un modèle de frigo.
+.folder-card {
+  @include focus-ring;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  width: 100%;
+  padding: 1rem 1.1rem;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: $radius-lg;
+  box-shadow: var(--shadow-1);
+  color: var(--text);
+  @media (prefers-reduced-motion: no-preference) {
+    transition: transform 120ms ease, box-shadow 120ms ease;
+  }
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-2);
+  }
+
+  &__icon {
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 10px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 1.3rem;
+  }
+
+  &__body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  &__title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+
+  &__name {
+    font-family: $font-display;
+    font-weight: 600;
+    font-size: var(--fs-md);
+    text-transform: capitalize;
+    overflow-wrap: anywhere;
+  }
+
+  &__badge {
+    font-family: $font-mono;
+    font-size: var(--fs-xs);
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    white-space: nowrap;
+  }
+
+  &__desc {
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
+  }
+
+  &__meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-family: $font-mono;
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+  }
+
+  &__chevron {
+    flex-shrink: 0;
+    color: var(--text-faint);
+    font-size: 1.1rem;
+  }
+
+  &--unfiled &__icon {
+    background: color-mix(in srgb, var(--text) 6%, transparent);
+    color: var(--text-muted);
+  }
+}

@@ -2,6 +2,8 @@ import { useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
 import { api } from "../api.js";
 import { formatSize } from "./DocumentCard.jsx";
+import { IconFolder, IconSnow } from "./Icons.jsx";
+import { FolderBrowser } from "./FolderBrowser.jsx";
 import { ScanReview } from "./ScanReview.jsx";
 import { useBackClose } from "../hooks/useBackClose.js";
 
@@ -29,10 +31,12 @@ async function buildScanPdf(pages) {
   return new File([blob], `scan-${stamp()}.pdf`, { type: "application/pdf" });
 }
 
-export function UploadPanel({ onClose, onUploaded }) {
+export function UploadPanel({ folders = [], initialFolderId, onClose, onUploaded }) {
   const [files, setFiles] = useState([]);
   const [scanPages, setScanPages] = useState([]);
   const [reviewFile, setReviewFile] = useState(null);
+  const [folderId, setFolderId] = useState(initialFolderId || "");
+  const [browsingFolders, setBrowsingFolders] = useState(false);
   const [category, setCategory] = useState("");
   const [tags, setTags] = useState("");
   const [progress, setProgress] = useState(null); // { label, percent }
@@ -46,6 +50,7 @@ export function UploadPanel({ onClose, onUploaded }) {
   const openCamera = () => cameraRef.current?.click();
 
   const hasContent = files.length > 0 || scanPages.length > 0;
+  const selectedFolder = folders.find((f) => f.id === folderId);
 
   const uploadOne = async (file, meta) => {
     // Upload direct client → Blob privé (jeton signé par /api/upload après
@@ -80,6 +85,7 @@ export function UploadPanel({ onClose, onUploaded }) {
           category: cat,
           tags: tagList,
           size: file.size,
+          folderId: folderId || undefined,
         });
       }
       onUploaded();
@@ -96,6 +102,23 @@ export function UploadPanel({ onClose, onUploaded }) {
           <h2>Mettre au froid</h2>
           <button type="button" className="overlay__close" onClick={onClose} aria-label="Fermer">
             ✕
+          </button>
+        </div>
+
+        <div className="upload-panel__folders">
+          <p className="field__label">Dossier de destination</p>
+          <button
+            type="button"
+            className="folder-field"
+            onClick={() => setBrowsingFolders(true)}
+          >
+            <span className={`folder-field__icon ${selectedFolder ? "" : "folder-field__icon--unfiled"}`}>
+              {selectedFolder ? <IconSnow /> : <IconFolder />}
+            </span>
+            <span className={`folder-field__name ${selectedFolder ? "" : "folder-field__name--unfiled"}`}>
+              {selectedFolder ? selectedFolder.name : "Non classé"}
+            </span>
+            <span className="folder-field__action">Parcourir</span>
           </button>
         </div>
 
@@ -195,6 +218,15 @@ export function UploadPanel({ onClose, onUploaded }) {
           {progress ? `Congélation… ${progress.percent}%` : "Congeler"}
         </button>
       </form>
+
+      {browsingFolders && (
+        <FolderBrowser
+          folders={folders}
+          selectedId={folderId}
+          onSelect={setFolderId}
+          onClose={() => setBrowsingFolders(false)}
+        />
+      )}
 
       {reviewFile && (
         <ScanReview

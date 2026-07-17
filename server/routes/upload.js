@@ -6,6 +6,7 @@ import { handleUpload } from "@vercel/blob/client";
 import { SESSION_COOKIE, verifySessionToken, OWNER_ID } from "../lib/auth.js";
 import { env } from "../lib/env.js";
 import { registerDocument } from "../services/documents.js";
+import { resolveFolderId } from "../services/folders.js";
 
 export const uploadRouter = Router();
 
@@ -47,6 +48,7 @@ uploadRouter.post("/", async (req, res) => {
           tags: Array.isArray(meta.tags) ? meta.tags : [],
           size: meta.size || 0,
           source: "web",
+          folderId: await resolveFolderId(payload.ownerId || OWNER_ID, meta.folderId),
           blobPath: blob.pathname,
           blobUrl: blob.url,
         });

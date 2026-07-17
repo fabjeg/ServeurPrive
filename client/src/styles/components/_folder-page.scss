@@ -1,0 +1,315 @@
+@use "../abstracts/variables" as *;
+@use "../abstracts/mixins" as *;
+
+// Page dossier : référentiel unique d'un modèle de frigo (voir maquette) —
+// en-tête, tuiles de stats, interventions fréquentes, documents.
+.folder-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+
+  &__head {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  &__back {
+    @include focus-ring;
+    align-self: flex-start;
+    font-size: 1.3rem;
+    line-height: 1;
+    padding: 0.3rem 0.65rem;
+    border-radius: $radius;
+    color: var(--text-muted);
+
+    &:hover {
+      color: var(--text);
+      background: var(--accent-soft);
+    }
+  }
+
+  &__title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  &__title {
+    font-family: $font-display;
+    font-size: var(--fs-xl);
+    font-weight: 600;
+    text-transform: capitalize;
+    overflow-wrap: anywhere;
+  }
+
+  &__badge {
+    font-family: $font-mono;
+    font-size: var(--fs-xs);
+    padding: 0.2rem 0.65rem;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    white-space: nowrap;
+  }
+
+  &__desc {
+    color: var(--text-muted);
+  }
+
+  &__actions {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+  }
+
+  &__section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+  }
+
+  &__section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  &__section-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: $font-display;
+    font-size: var(--fs-lg);
+    font-weight: 600;
+
+    svg {
+      color: var(--accent);
+    }
+  }
+
+  &__empty {
+    color: var(--text-muted);
+    font-size: var(--fs-md);
+  }
+}
+
+// Tuiles de stats (Manuel 3, Schémas 4, Temps moy. 18 min…).
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: $gap;
+}
+
+.stat-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 1.1rem 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: $radius-lg;
+  box-shadow: var(--shadow-1);
+  text-align: center;
+
+  &__icon {
+    display: grid;
+    place-items: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 8px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 1.1rem;
+  }
+
+  &__label {
+    @include stamp;
+    text-transform: capitalize;
+    font-size: var(--fs-sm);
+    letter-spacing: 0.02em;
+  }
+
+  &__value {
+    font-family: $font-display;
+    font-size: var(--fs-lg);
+    font-weight: 600;
+  }
+}
+
+// Interventions fréquentes : lignes tuiles avec durée et étapes dépliables.
+.intervention-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.intervention {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: $radius-lg;
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+
+  &__main {
+    @include focus-ring;
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    width: 100%;
+    padding: 0.9rem 1.1rem;
+    text-align: left;
+    color: var(--text);
+
+    &:hover {
+      background: color-mix(in srgb, var(--accent) 4%, transparent);
+    }
+  }
+
+  &__icon {
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: 10px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 1.15rem;
+  }
+
+  &__body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  &__title {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  &__note {
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
+  }
+
+  &__duration {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-family: $font-mono;
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
+    white-space: nowrap;
+
+    svg {
+      color: var(--accent);
+    }
+  }
+
+  &__chevron {
+    flex-shrink: 0;
+    color: var(--text-faint);
+    font-size: 1rem;
+    @media (prefers-reduced-motion: no-preference) {
+      transition: transform 120ms ease;
+    }
+
+    &.is-open {
+      transform: rotate(90deg);
+    }
+  }
+
+  &__details {
+    padding: 0 1.1rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+
+  &__steps {
+    margin: 0;
+    padding-left: 1.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: var(--fs-md);
+    color: var(--text);
+
+    li::marker {
+      font-family: $font-mono;
+      color: var(--accent);
+    }
+  }
+
+  &__actions {
+    display: flex;
+    gap: 0.6rem;
+  }
+
+  &__quick-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 1.1rem 0.6rem;
+  }
+
+  &__edit {
+    @include stamp;
+    @include focus-ring;
+    padding: 0.15rem 0;
+
+    &:hover {
+      color: var(--text);
+    }
+  }
+}
+
+// Formulaire en panneau (dossier, intervention) — même gabarit que l'upload.
+.panel-form {
+  @include surface;
+  background: var(--surface-raised);
+  width: min(480px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+
+  &__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    h2 {
+      font-family: $font-display;
+      font-size: var(--fs-lg);
+      font-weight: 600;
+    }
+  }
+
+  &__row {
+    display: grid;
+    grid-template-columns: 1fr 120px;
+    gap: $gap;
+
+    @media (max-width: 520px) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  &__error {
+    color: var(--danger);
+    font-size: var(--fs-md);
+  }
+}

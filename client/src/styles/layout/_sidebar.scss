@@ -52,6 +52,11 @@
       color: var(--accent);
       font-weight: 600;
     }
+
+    // Noms de dossiers stockés en minuscules : capitalisation d'affichage.
+    &--folder span:first-child {
+      text-transform: capitalize;
+    }
   }
 
   &__count {

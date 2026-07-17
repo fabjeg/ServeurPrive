@@ -14,11 +14,14 @@
 
 @use "layout/shell";
 @use "layout/sidebar";
+@use "layout/mobile-nav";
 @use "layout/manifest";
 
 @use "components/buttons";
 @use "components/fields";
 @use "components/doc-card";
+@use "components/folder-card";
+@use "components/folder-page";
 @use "components/overlay";
 @use "components/upload-panel";
 @use "components/scan";

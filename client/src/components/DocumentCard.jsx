@@ -1,13 +1,5 @@
 import { api } from "../api.js";
-
-// Élément signature : la fiche de congélation. Bande de catégorie sur la
-// tranche, métadonnées tamponnées en mono. Les teintes de bande restent
-// dans la gamme froide (bleu → pétrole), jamais de nouvel accent chaud.
-function categoryHue(category) {
-  let hash = 0;
-  for (const ch of category) hash = (hash * 31 + ch.charCodeAt(0)) % 997;
-  return 185 + (hash % 55); // 185–240 : cyans et bleus froids
-}
+import { IconAlert, IconDoc, IconImage } from "./Icons.jsx";
 
 export function formatSize(bytes) {
   if (!bytes) return "— Ko";
@@ -27,25 +19,37 @@ export function kindLabel(mimetype) {
   return "FICHIER";
 }
 
+function kindIcon(mimetype) {
+  if (mimetype.startsWith("image/")) return IconImage;
+  if (mimetype === "application/pdf" || mimetype.startsWith("text/")) return IconDoc;
+  return IconAlert;
+}
+
+// Tuile document : pastille d'icône, nom, métadonnées en tampon mono,
+// actions sur la tranche droite.
 export function DocumentCard({ doc, onOpen, onDelete }) {
-  const hue = categoryHue(doc.category);
+  const Kind = kindIcon(doc.mimetype);
 
   return (
-    <li className="doc-card" style={{ "--strip-hue": hue }}>
-      <span className="doc-card__strip" aria-hidden="true" />
+    <li className="doc-card">
       <button className="doc-card__body" onClick={() => onOpen(doc)}>
-        <p className="doc-card__stamp">
-          {kindLabel(doc.mimetype)} · {formatDate(doc.uploadedAt)} · {formatSize(doc.size)}
-        </p>
-        <p className="doc-card__name">{doc.filename}</p>
-        <p className="doc-card__meta">
-          <span className="doc-card__category">{doc.category}</span>
-          {doc.tags.map((t) => (
-            <span key={t} className="doc-card__tag">
-              #{t}
-            </span>
-          ))}
-        </p>
+        <span className="doc-card__icon">
+          <Kind />
+        </span>
+        <span className="doc-card__text">
+          <span className="doc-card__name">{doc.filename}</span>
+          <span className="doc-card__stamp">
+            {kindLabel(doc.mimetype)} · {formatDate(doc.uploadedAt)} · {formatSize(doc.size)}
+          </span>
+          <span className="doc-card__meta">
+            <span className="doc-card__category">{doc.category}</span>
+            {doc.tags.map((t) => (
+              <span key={t} className="doc-card__tag">
+                #{t}
+              </span>
+            ))}
+          </span>
+        </span>
       </button>
       <div className="doc-card__actions">
         <a className="doc-card__action" href={api.downloadUrl(doc.id)} title="Télécharger">

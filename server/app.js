@@ -2,6 +2,7 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import { authRouter } from "./routes/auth.js";
 import { documentsRouter } from "./routes/documents.js";
+import { foldersRouter } from "./routes/folders.js";
 import { uploadRouter } from "./routes/upload.js";
 import { mcpRouter } from "./mcp/index.js";
 
@@ -16,6 +17,7 @@ app.use(cookieParser());
 app.use("/api/auth", authRouter);
 app.use("/api/upload", uploadRouter);
 app.use("/api/documents", documentsRouter);
+app.use("/api/folders", foldersRouter);
 app.use("/api/mcp/:token", mcpRouter); // jeton dans l'URL (connecteur claude.ai)
 app.use("/api/mcp", mcpRouter); // jeton en Bearer (Claude Code, API)
 

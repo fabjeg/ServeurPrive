@@ -107,6 +107,79 @@ try {
   check("base64 invalide rejeté", true, "erreur de validation levée");
 }
 
+// 9. Cycle dossiers + interventions
+const folderName = "test dossier mcp";
+r = await client.callTool({
+  name: "add_document",
+  arguments: {
+    filename: "doc-dossier.txt",
+    mimetype: "text/plain",
+    content: Buffer.from("doc rattaché à un dossier", "utf8").toString("base64"),
+    category: "manuel",
+    folder: folderName,
+  },
+});
+check("add_document avec folder crée et rattache", new RegExp(folderName).test(text(r)));
+const docInFolder = text(r).match(/\[([0-9a-f]{24})\]/)?.[1];
+
+r = await client.callTool({ name: "list_folders", arguments: {} });
+check("list_folders liste le dossier", new RegExp(`${folderName} — 1 document`).test(text(r)));
+
+r = await client.callTool({
+  name: "add_intervention",
+  arguments: {
+    folder: folderName,
+    title: "dégivrage manuel",
+    note: "accès direct depuis la cabine",
+    duration_minutes: 3,
+    steps: ["couper le froid", "lancer le dégivrage"],
+  },
+});
+check("add_intervention crée l'intervention", /Intervention ajoutée/.test(text(r)) && /3 min/.test(text(r)));
+const interventionId = text(r).match(/\[([0-9a-f]{24})\]/)?.[1];
+
+r = await client.callTool({ name: "get_folder", arguments: { name: folderName } });
+check(
+  "get_folder retourne docs + interventions + temps moyen",
+  /doc-dossier\.txt/.test(text(r)) && /dégivrage manuel/.test(text(r)) && /temps moyen 3 min/.test(text(r))
+);
+
+r = await client.callTool({
+  name: "update_intervention",
+  arguments: { id: interventionId, duration_minutes: 5 },
+});
+check("update_intervention change la durée", /5 min/.test(text(r)));
+
+r = await client.callTool({
+  name: "delete_intervention",
+  arguments: { id: interventionId, confirmed: false },
+});
+check("delete_intervention refusé sans confirmation", /Suppression refusée/.test(text(r)));
+r = await client.callTool({
+  name: "delete_intervention",
+  arguments: { id: interventionId, confirmed: true },
+});
+check("delete_intervention confirmé supprime", /supprimée définitivement/.test(text(r)));
+
+// 10. Détachement du document puis nettoyage complet
+r = await client.callTool({
+  name: "update_document",
+  arguments: { id: docInFolder, folder: "" },
+});
+check("update_document folder vide détache", /mis à jour/.test(text(r)));
+r = await client.callTool({ name: "list_folders", arguments: {} });
+check(
+  "dossier vide après détachement",
+  new RegExp(`${folderName} — 0 document`).test(text(r))
+);
+
+r = await client.callTool({ name: "delete_folder", arguments: { name: folderName, confirmed: false } });
+check("delete_folder refusé sans confirmation", /Suppression refusée/.test(text(r)));
+r = await client.callTool({ name: "delete_folder", arguments: { name: folderName, confirmed: true } });
+check("delete_folder confirmé supprime", /supprimé/.test(text(r)));
+r = await client.callTool({ name: "delete_document", arguments: { id: docInFolder, confirmed: true } });
+check("nettoyage du document de test", /supprimé définitivement/.test(text(r)));
+
 await client.close();
 console.log(failures ? `\n${failures} échec(s)` : "\nTous les tests passent.");
 process.exit(failures ? 1 : 0);

@@ -21,24 +21,6 @@ export function SearchBar({ filters, onChange }) {
         onChange={(e) => setQ(e.target.value)}
         aria-label="Recherche"
       />
-      <div className="manifest__dates">
-        <label>
-          <span>Du</span>
-          <input
-            type="date"
-            value={filters.from}
-            onChange={(e) => onChange((f) => ({ ...f, from: e.target.value }))}
-          />
-        </label>
-        <label>
-          <span>Au</span>
-          <input
-            type="date"
-            value={filters.to}
-            onChange={(e) => onChange((f) => ({ ...f, to: e.target.value }))}
-          />
-        </label>
-      </div>
     </header>
   );
 }

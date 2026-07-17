@@ -41,20 +41,27 @@ authentification.** Jamais de secret dans ce fichier ni dans le repo.
 
 ## Serveur MCP (`server/mcp/index.js`)
 
-Streamable HTTP stateless (un serveur par POST). Six tools :
-- `list_documents`, `search_documents`, `get_document_content`
-  (texte des PDF extrait via pdf-parse v2, classe `PDFParse`)
+Streamable HTTP stateless (un serveur par POST). Douze tools :
+- `list_documents` (filtre `folder` par nom), `search_documents`,
+  `get_document_content` (texte des PDF extrait via pdf-parse v2, classe `PDFParse`)
 - `add_document` : base64 ≤ **3 Mo** décodés (transite par la fonction,
   express.json limité à 4.5mb dans `server/app.js`), liste blanche MIME
-  (pdf, png/jpeg/webp/gif, text/*, json), `source_url` + `description`
-  optionnels, `source: "claude"` en base (`"web"` pour l'interface)
+  (pdf, png/jpeg/webp/gif, text/*, json), `folder` (dossier créé au besoin),
+  `source_url` + `description` optionnels, `source: "claude"` en base
 - `update_document` : métadonnées seulement (le blob n'est jamais déplacé,
-  le nom affiché vient de `filename` via Content-Disposition du proxy)
-- `delete_document` : exige `confirmed: true` et une confirmation explicite
-  de l'utilisateur dans la conversation — jamais à l'initiative de l'IA
+  le nom affiché vient de `filename` via Content-Disposition du proxy) ;
+  `folder: ""` détache du dossier
+- `list_folders`, `get_folder` : dossiers = référentiels par modèle de frigo
+  (documents, interventions fréquentes, temps moyen)
+- `add_intervention`, `update_intervention` : procédures d'un dossier (titre,
+  note, durée, étapes — les étapes fournies remplacent les anciennes)
+- `delete_document`, `delete_intervention`, `delete_folder` : exigent
+  `confirmed: true` et une confirmation explicite de l'utilisateur dans la
+  conversation — jamais à l'initiative de l'IA. `delete_folder` conserve les
+  documents (détachés, non classés) mais supprime les interventions.
 
-Convention métadonnées : catégories/tags en minuscules, style
-« xarios 600 » / « schema electrique ».
+Convention métadonnées : catégories/tags/dossiers en minuscules, style
+« carrier xarios 200 » / « schema electrique » (capitalisation en CSS).
 
 ## Commandes
 
@@ -62,7 +69,7 @@ Convention métadonnées : catégories/tags en minuscules, style
 npm install && npm --prefix client install   # depuis la racine UNIQUEMENT
 node --env-file=.env server/local.js         # API locale :3000
 npm run dev:client                           # Vite :5173 (proxy /api)
-node --env-file=.env scripts/test-mcp-write.mjs [baseUrl]  # e2e MCP (14 checks)
+node --env-file=.env scripts/test-mcp-write.mjs [baseUrl]  # e2e MCP (26 checks)
 vercel --prod --yes                          # déploiement production
 ```
 

@@ -28,7 +28,12 @@ export function useBackClose(onClose) {
     stack.push(id);
 
     const onPop = () => {
-      if (stack[stack.length - 1] === id) closeRef.current();
+      if (stack[stack.length - 1] !== id) return;
+      // Le back "de consommation" (fermeture par ✕ d'un overlay au-dessus)
+      // ramène l'historique SUR notre propre entrée : ne fermer que si le
+      // pop nous a fait passer derrière elle.
+      if ((window.history.state?.overlay ?? 0) >= id) return;
+      closeRef.current();
     };
     window.addEventListener("popstate", onPop);
 

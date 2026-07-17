@@ -27,9 +27,11 @@ export function Viewer({ doc, onClose, onDelete }) {
             <a className="btn" href={api.downloadUrl(doc.id)}>
               Télécharger
             </a>
-            <button className="btn btn--danger" onClick={() => onDelete(doc)}>
-              Supprimer
-            </button>
+            {onDelete && (
+              <button className="btn btn--danger" onClick={() => onDelete(doc)}>
+                Supprimer
+              </button>
+            )}
             <button className="overlay__close" onClick={onClose} aria-label="Fermer">
               ✕
             </button>

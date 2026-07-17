@@ -4,7 +4,7 @@ const THEME_OPTIONS = [
   { value: "auto", label: "Auto" },
 ];
 
-function ThemeSwitch({ preference, onChoose }) {
+export function ThemeSwitch({ preference, onChoose }) {
   const handleKeyDown = (event) => {
     if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
     event.preventDefault();
@@ -41,15 +41,18 @@ function ThemeSwitch({ preference, onChoose }) {
 }
 
 export function Sidebar({
-  categories,
-  activeCategory,
-  onSelectCategory,
+  folders,
+  unfiledCount,
+  activeFolderId,
+  onSelectHome,
+  onSelectFolder,
+  onSelectUnfiled,
   onOpenUpload,
   onLogout,
   themePreference,
   onChooseTheme,
 }) {
-  const total = categories.reduce((sum, c) => sum + c.count, 0);
+  const total = folders.reduce((sum, f) => sum + f.documentCount, 0) + unfiledCount;
 
   return (
     <aside className="sidebar">
@@ -59,25 +62,36 @@ export function Sidebar({
         + Mettre au froid
       </button>
 
-      <nav className="sidebar__nav" aria-label="Compartiments">
-        <p className="sidebar__heading">Compartiments</p>
+      <nav className="sidebar__nav" aria-label="Dossiers">
+        <p className="sidebar__heading">Dossiers</p>
         <button
-          className={`sidebar__item ${!activeCategory ? "is-active" : ""}`}
-          onClick={() => onSelectCategory("")}
+          className={`sidebar__item ${!activeFolderId ? "is-active" : ""}`}
+          onClick={onSelectHome}
         >
-          <span>Tout</span>
+          <span>Tous les modèles</span>
           <span className="sidebar__count">{total}</span>
         </button>
-        {categories.map((c) => (
+        {folders.map((f) => (
           <button
-            key={c.name}
-            className={`sidebar__item ${activeCategory === c.name ? "is-active" : ""}`}
-            onClick={() => onSelectCategory(c.name)}
+            key={f.id}
+            className={`sidebar__item sidebar__item--folder ${
+              activeFolderId === f.id ? "is-active" : ""
+            }`}
+            onClick={() => onSelectFolder(f)}
           >
-            <span>{c.name}</span>
-            <span className="sidebar__count">{c.count}</span>
+            <span>{f.name}</span>
+            <span className="sidebar__count">{f.documentCount}</span>
           </button>
         ))}
+        {unfiledCount > 0 && (
+          <button
+            className={`sidebar__item ${activeFolderId === "unfiled" ? "is-active" : ""}`}
+            onClick={onSelectUnfiled}
+          >
+            <span>Non classés</span>
+            <span className="sidebar__count">{unfiledCount}</span>
+          </button>
+        )}
       </nav>
 
       <div className="sidebar__appearance">

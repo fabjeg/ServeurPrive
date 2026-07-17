@@ -10,7 +10,9 @@ import {
   listCategories,
   listDocuments,
   registerDocument,
+  updateDocument,
 } from "../services/documents.js";
+import { resolveFolderId } from "../services/folders.js";
 
 export const documentsRouter = Router();
 documentsRouter.use(requireAuth);
@@ -18,8 +20,8 @@ documentsRouter.use(requireAuth);
 // Listing avec filtres catégorie / tag / recherche / dates.
 documentsRouter.get("/", async (req, res, next) => {
   try {
-    const { category, tag, q, from, to } = req.query;
-    const docs = await listDocuments(req.ownerId, { category, tag, q, from, to });
+    const { category, tag, q, from, to, folder } = req.query;
+    const docs = await listDocuments(req.ownerId, { category, tag, q, from, to, folder });
     res.setHeader("Cache-Control", "private, no-store");
     res.json({ documents: docs.map((d) => d.toClient()) });
   } catch (err) {
@@ -42,7 +44,7 @@ documentsRouter.get("/categories", async (req, res, next) => {
 // Confirmation post-upload : enregistre les métadonnées en Mongo.
 documentsRouter.post("/", async (req, res, next) => {
   try {
-    const { filename, mimetype, category, tags, size, blobPath, blobUrl } =
+    const { filename, mimetype, category, tags, size, blobPath, blobUrl, folderId } =
       req.body || {};
     if (!filename || !blobPath || !blobUrl) {
       return res.status(400).json({ error: "Métadonnées incomplètes." });
@@ -57,6 +59,8 @@ documentsRouter.post("/", async (req, res, next) => {
       tags: Array.isArray(tags) ? tags.filter(Boolean) : [],
       size: Number(size) || 0,
       source: "web",
+      // Un folderId inconnu ou étranger est simplement ignoré (null).
+      folderId: await resolveFolderId(req.ownerId, folderId),
       blobPath,
       blobUrl,
     });
@@ -71,6 +75,26 @@ documentsRouter.get("/:id", async (req, res, next) => {
     const doc = await getDocument(req.ownerId, req.params.id);
     if (!doc) return res.status(404).json({ error: "Document introuvable." });
     res.setHeader("Cache-Control", "private, no-store");
+    res.json({ document: doc.toClient() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Mise à jour des métadonnées (dont rattachement à un dossier).
+documentsRouter.patch("/:id", async (req, res, next) => {
+  try {
+    const { filename, category, tags, description, folderId } = req.body || {};
+    const doc = await updateDocument(req.ownerId, req.params.id, {
+      filename,
+      category,
+      tags: Array.isArray(tags) ? tags.filter(Boolean) : undefined,
+      description,
+      // folderId : absent = inchangé, null/"" = détacher, sinon dossier validé.
+      folderId:
+        folderId === undefined ? undefined : await resolveFolderId(req.ownerId, folderId),
+    });
+    if (!doc) return res.status(404).json({ error: "Document introuvable." });
     res.json({ document: doc.toClient() });
   } catch (err) {
     next(err);

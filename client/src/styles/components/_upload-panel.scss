@@ -76,6 +76,12 @@
     white-space: nowrap;
   }
 
+  &__folders {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
   &__fields {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -89,5 +95,208 @@
   &__error {
     color: var(--danger);
     font-size: var(--fs-md);
+  }
+}
+
+// Champ compact « dossier de destination » : affiche la sélection courante
+// et ouvre la fenêtre de navigation des dossiers.
+.folder-field {
+  @include focus-ring;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: $radius;
+  text-align: left;
+  color: var(--text);
+
+  &:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  &__icon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    color: var(--accent);
+
+    &--unfiled {
+      color: var(--text-muted);
+    }
+  }
+
+  &__name {
+    flex: 1;
+    min-width: 0;
+    text-transform: capitalize; // noms stockés en minuscules
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &--unfiled {
+      text-transform: none;
+      color: var(--text-muted);
+    }
+  }
+
+  &__action {
+    @include stamp;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+}
+
+// Fenêtre de navigation dans les dossiers (recherche + liste).
+.folder-browser {
+  @include surface;
+  background: var(--surface-raised);
+  width: min(440px, 100%);
+  max-height: min(70vh, 34rem);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+
+  &__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    h2 {
+      font-family: $font-display;
+      font-size: var(--fs-lg);
+      font-weight: 600;
+      text-transform: capitalize; // noms stockés en minuscules
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  &__crumb {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+
+  &__title--unfiled {
+    text-transform: none;
+  }
+
+  &__doc {
+    @include focus-ring;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.45rem 0.55rem;
+    border-radius: calc(#{$radius} - 2px);
+    font-size: var(--fs-md);
+    text-align: left;
+    color: var(--text);
+
+    &:hover {
+      background: var(--accent-soft);
+    }
+  }
+
+  &__doc-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__search {
+    @include surface;
+    @include focus-ring;
+    padding: 0.55rem 0.75rem;
+    font-size: var(--fs-base);
+    color: var(--text);
+
+    &::placeholder {
+      color: var(--text-faint);
+    }
+  }
+
+  &__list {
+    flex: 1;
+    min-height: 0; // sinon la liste flex ne scrolle pas
+    max-height: none;
+  }
+
+  &__empty {
+    padding: 0.75rem 0.5rem;
+    color: var(--text-muted);
+    font-size: var(--fs-md);
+  }
+}
+
+// Liste navigable des dossiers (fenêtre de navigation).
+.folder-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 11.5rem;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: $radius;
+  padding: 3px;
+
+  &__item {
+    @include focus-ring;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.45rem 0.55rem;
+    border-radius: calc(#{$radius} - 2px);
+    text-align: left;
+    color: var(--text);
+
+    &:hover {
+      background: var(--accent-soft);
+    }
+
+    &.is-selected {
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 600;
+    }
+  }
+
+  &__icon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    font-size: 1.05rem;
+    color: var(--accent);
+
+    &--unfiled {
+      color: var(--text-muted);
+    }
+  }
+
+  &__name {
+    flex: 1;
+    min-width: 0;
+    text-transform: capitalize; // noms stockés en minuscules
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &--unfiled {
+      text-transform: none;
+      color: var(--text-muted);
+    }
+  }
+
+  &__count {
+    font-family: $font-mono;
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
+    white-space: nowrap;
   }
 }

@@ -10,14 +10,27 @@
     @include stamp;
   }
 
-  input {
+  input,
+  select,
+  textarea {
     @include surface;
     @include focus-ring;
     padding: 0.55rem 0.75rem;
     font-size: var(--fs-base);
+    color: var(--text);
 
     &::placeholder {
       color: var(--text-faint);
     }
   }
+
+  textarea {
+    resize: vertical;
+    font-family: inherit;
+  }
+}
+
+// Champ pleine largeur dans une grille de formulaire à deux colonnes.
+.field--wide {
+  grid-column: 1 / -1;
 }
