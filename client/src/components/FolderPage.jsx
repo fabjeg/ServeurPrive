@@ -84,7 +84,7 @@ function InterventionRow({ intervention, onEdit, onDelete }) {
   );
 }
 
-export function FolderPage({ folderId, version, onBack, onOpenDoc, onDeleteDoc, onAddPdf, onChanged }) {
+export function FolderPage({ space, folderId, version, onBack, onOpenDoc, onDeleteDoc, onAddPdf, onChanged }) {
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState("");
   const [interventionForm, setInterventionForm] = useState(null); // null | {} | { intervention }
@@ -94,10 +94,10 @@ export function FolderPage({ folderId, version, onBack, onOpenDoc, onDeleteDoc, 
 
   const load = useCallback(() => {
     api
-      .folderDetail(folderId)
+      .folderDetail(space, folderId)
       .then(setDetail)
       .catch((err) => setError(err.message || "Dossier inaccessible."));
-  }, [folderId]);
+  }, [space, folderId]);
 
   useEffect(load, [load, version]);
 
@@ -110,7 +110,7 @@ export function FolderPage({ folderId, version, onBack, onOpenDoc, onDeleteDoc, 
         : "") +
       "ses interventions seront supprimées.";
     if (!window.confirm(warning)) return;
-    await api.deleteFolder(folder.id);
+    await api.deleteFolder(space, folder.id);
     onChanged();
     onBack();
   };
@@ -215,6 +215,7 @@ export function FolderPage({ folderId, version, onBack, onOpenDoc, onDeleteDoc, 
 
       {interventionForm && (
         <InterventionForm
+          space={space}
           folderId={folder.id}
           intervention={interventionForm.intervention}
           onClose={() => setInterventionForm(null)}
@@ -226,6 +227,7 @@ export function FolderPage({ folderId, version, onBack, onOpenDoc, onDeleteDoc, 
       )}
       {editingFolder && (
         <FolderForm
+          space={space}
           folder={folder}
           onClose={() => setEditingFolder(false)}
           onSaved={() => {

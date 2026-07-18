@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { IconAlert, IconBot, IconSend, IconSparkle, IconTrash } from "./Icons.jsx";
 
 // Assistant documentaire : bouton flottant + panneau de conversation.
 // La réponse arrive en SSE depuis /api/chat (voir server/routes/chat.js) ;
@@ -11,6 +12,7 @@ export function ChatPanel({ contextDoc = null }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef(null);
+  const inputRef = useRef(null);
   const abortRef = useRef(null);
 
   useEffect(() => {
@@ -20,8 +22,17 @@ export function ChatPanel({ contextDoc = null }) {
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
-  const send = async () => {
-    const text = input.trim();
+  // Zone de saisie extensible : grandit avec le contenu jusqu'à une limite,
+  // au-delà elle défile — évite un pavé figé à 2 lignes ou un débordement.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 132)}px`;
+  }, [input, open]);
+
+  const send = async (overrideText) => {
+    const text = (overrideText ?? input).trim();
     if (!text || busy) return;
     setInput("");
     setBusy(true);
@@ -103,78 +114,159 @@ export function ChatPanel({ contextDoc = null }) {
     }
   };
 
+  const suggestions = contextDoc
+    ? [
+        "Résume ce document",
+        "Quels sont les points clés à retenir ?",
+        "Y a-t-il des alarmes ou codes d'erreur mentionnés ?",
+      ]
+    : [
+        "Liste mes dossiers",
+        "Quels documents ai-je sur le Xarios 200 ?",
+        "Résume mes interventions récentes",
+      ];
+
   return (
     <>
-      <button
-        className="chat-fab"
-        onClick={() => setOpen((o) => !o)}
-        aria-label={open ? "Fermer l'assistant" : "Ouvrir l'assistant"}
-        aria-expanded={open}
-      >
-        {open ? "×" : "?"}
-      </button>
+      {!open && (
+        <button
+          type="button"
+          className="chat-fab"
+          onClick={() => setOpen(true)}
+          aria-label="Ouvrir l'assistant virtuel Frigo"
+        >
+          <span className="chat-fab__icon">
+            <IconBot />
+          </span>
+          <span className="chat-fab__label">Assistant</span>
+          <span className="chat-fab__badge" aria-hidden="true">
+            <IconSparkle />
+          </span>
+        </button>
+      )}
 
       {open && (
-        <section className="chat" aria-label="Assistant documentaire">
+        <section className="chat" aria-label="Assistant virtuel documentaire">
           <header className="chat__head">
-            <h2 className="chat__title">Assistant</h2>
+            <div className="chat__identity">
+              <span className="chat__avatar" aria-hidden="true">
+                <IconBot />
+              </span>
+              <div className="chat__identity-text">
+                <h2 className="chat__title">Assistant Frigo</h2>
+                <p className="chat__subtitle">
+                  <span className="chat__status-dot" aria-hidden="true" />
+                  Assistant virtuel documentaire
+                </p>
+              </div>
+            </div>
             <div className="chat__head-actions">
               {messages.length > 0 && (
                 <button
-                  className="chat__clear"
+                  type="button"
+                  className="chat__icon-btn"
                   onClick={() => {
                     abortRef.current?.abort();
                     setMessages([]);
                   }}
+                  aria-label="Effacer la conversation"
+                  title="Effacer la conversation"
                 >
-                  Effacer
+                  <IconTrash />
                 </button>
               )}
               <button
-                className="chat__close"
+                type="button"
+                className="chat__icon-btn"
                 onClick={() => setOpen(false)}
                 aria-label="Fermer l'assistant"
+                title="Fermer"
               >
-                ×
+                ✕
               </button>
             </div>
           </header>
 
           {contextDoc && (
             <p className="chat__context" title={contextDoc.filename}>
-              Document ouvert : {contextDoc.filename}
+              Document ouvert · <strong>{contextDoc.filename}</strong>
             </p>
           )}
 
-          <div className="chat__scroll" ref={scrollRef}>
+          <div className="chat__scroll" ref={scrollRef} role="log" aria-live="polite">
             {messages.length === 0 && (
-              <p className="chat__empty">
-                {contextDoc
-                  ? `Pose une question sur « ${contextDoc.filename} » : « Résume ce document », « Quel est le réglage du thermostat ? »…`
-                  : "Pose une question sur tes documents : « Quel est le réglage du thermostat sur le Xarios 200 ? », « Résume la notice du groupe froid… »"}
-              </p>
+              <div className="chat__welcome">
+                <span className="chat__welcome-icon" aria-hidden="true">
+                  <IconBot />
+                </span>
+                <p className="chat__welcome-title">Bonjour, je suis l'assistant Frigo</p>
+                <p className="chat__welcome-text">
+                  {contextDoc
+                    ? <>Pose-moi une question sur « {contextDoc.filename} » : je le lis pour toi.</>
+                    : "Je cherche dans tes documents, je les résume et je réponds à tes questions techniques."}
+                </p>
+                <div className="chat__suggestions">
+                  {suggestions.map((s) => (
+                    <button
+                      type="button"
+                      key={s}
+                      className="chat__suggestion"
+                      onClick={() => send(s)}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
             {messages.map((m, i) => (
               <div key={i} className={`chat__msg chat__msg--${m.role}`}>
-                {m.text && <p className="chat__bubble">{m.text}</p>}
-                {m.status && <p className="chat__status">{m.status}</p>}
-                {m.error && <p className="chat__error">{m.error}</p>}
+                {m.role === "assistant" && (
+                  <span className="chat__msg-avatar" aria-hidden="true">
+                    <IconBot />
+                  </span>
+                )}
+                <div className="chat__msg-body">
+                  {m.text && <p className="chat__bubble">{m.text}</p>}
+                  {m.status && (
+                    <p className="chat__status">
+                      <span className="chat__typing" aria-hidden="true">
+                        <span />
+                        <span />
+                        <span />
+                      </span>
+                      {m.status}
+                    </p>
+                  )}
+                  {m.error && (
+                    <p className="chat__error">
+                      <IconAlert /> {m.error}
+                    </p>
+                  )}
+                </div>
               </div>
             ))}
           </div>
 
           <footer className="chat__composer">
             <textarea
+              ref={inputRef}
               className="chat__input"
-              rows={2}
-              placeholder="Ta question…"
+              rows={1}
+              placeholder="Écris ta question…"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKeyDown}
               disabled={busy}
             />
-            <button className="chat__send" onClick={send} disabled={busy || !input.trim()}>
-              Envoyer
+            <button
+              type="button"
+              className="chat__send"
+              onClick={() => send()}
+              disabled={busy || !input.trim()}
+              aria-label="Envoyer"
+            >
+              <IconSend />
             </button>
           </footer>
         </section>

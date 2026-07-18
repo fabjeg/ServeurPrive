@@ -27,5 +27,8 @@
 @use "components/scan";
 @use "components/viewer";
 @use "components/chat";
+@use "components/search-results";
 
 @use "pages/login";
+@use "pages/space-home";
+@use "pages/perso-shell";

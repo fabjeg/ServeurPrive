@@ -4,7 +4,7 @@ import { useBackClose } from "../hooks/useBackClose.js";
 
 // Création / édition d'une intervention fréquente d'un dossier.
 // Les étapes se saisissent une par ligne.
-export function InterventionForm({ folderId, intervention, onClose, onSaved }) {
+export function InterventionForm({ space, folderId, intervention, onClose, onSaved }) {
   const [title, setTitle] = useState(intervention?.title || "");
   const [note, setNote] = useState(intervention?.note || "");
   const [duration, setDuration] = useState(
@@ -30,7 +30,7 @@ export function InterventionForm({ folderId, intervention, onClose, onSaved }) {
       };
       const res = intervention
         ? await api.updateIntervention(folderId, intervention.id, body)
-        : await api.createIntervention(folderId, body);
+        : await api.createIntervention(space, folderId, body);
       onSaved(res.intervention);
     } catch (err) {
       setError(err.message || "Échec de l'enregistrement.");

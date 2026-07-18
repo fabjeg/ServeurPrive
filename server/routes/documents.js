@@ -1,5 +1,8 @@
 // Routes documentaires — TOUTES derrière requireAuth, y compris listing et
 // téléchargement. Le client ne voit jamais d'URL Blob : consultation via proxy.
+// Cloisonnement pro/perso : `space` est obligatoire sur CHAQUE route (query
+// param en lecture, champ body en écriture) — jamais de valeur par défaut
+// silencieuse qui pourrait mélanger les deux espaces.
 import { Router } from "express";
 import { Readable } from "node:stream";
 import { requireAuth } from "../lib/auth.js";
@@ -11,6 +14,7 @@ import {
   listCategories,
   listDocuments,
   registerDocument,
+  searchDocumentsFullText,
   updateDocument,
 } from "../services/documents.js";
 import { getOrCreateFolder, listFolders, resolveFolderId } from "../services/folders.js";
@@ -19,11 +23,19 @@ import { analyzeDocumentText } from "../services/analyze.js";
 export const documentsRouter = Router();
 documentsRouter.use(requireAuth);
 
+function parseSpace(value) {
+  return value === "pro" || value === "perso" ? value : null;
+}
+
+const SPACE_ERROR = { error: "Paramètre space requis (pro ou perso)." };
+
 // Listing avec filtres catégorie / tag / recherche / dates.
 documentsRouter.get("/", async (req, res, next) => {
   try {
+    const space = parseSpace(req.query.space);
+    if (!space) return res.status(400).json(SPACE_ERROR);
     const { category, tag, q, from, to, folder } = req.query;
-    const docs = await listDocuments(req.ownerId, { category, tag, q, from, to, folder });
+    const docs = await listDocuments(req.ownerId, { space, category, tag, q, from, to, folder });
     res.setHeader("Cache-Control", "private, no-store");
     res.json({ documents: docs.map((d) => d.toClient()) });
   } catch (err) {
@@ -31,9 +43,25 @@ documentsRouter.get("/", async (req, res, next) => {
   }
 });
 
+// Recherche full-text (index Mongo sur filename/tags/extractedText), avec
+// extrait de contexte par résultat — voir searchDocumentsFullText().
+documentsRouter.get("/search", async (req, res, next) => {
+  try {
+    const space = parseSpace(req.query.space);
+    if (!space) return res.status(400).json(SPACE_ERROR);
+    const results = await searchDocumentsFullText(req.ownerId, space, req.query.q);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json({ results });
+  } catch (err) {
+    next(err);
+  }
+});
+
 documentsRouter.get("/categories", async (req, res, next) => {
   try {
-    const categories = await listCategories(req.ownerId);
+    const space = parseSpace(req.query.space);
+    if (!space) return res.status(400).json(SPACE_ERROR);
+    const categories = await listCategories(req.ownerId, space);
     res.setHeader("Cache-Control", "private, no-store");
     res.json({
       categories: categories.map((c) => ({ name: c._id, count: c.count })),
@@ -46,6 +74,8 @@ documentsRouter.get("/categories", async (req, res, next) => {
 // Confirmation post-upload : enregistre les métadonnées en Mongo.
 documentsRouter.post("/", async (req, res, next) => {
   try {
+    const space = parseSpace(req.body?.space);
+    if (!space) return res.status(400).json(SPACE_ERROR);
     const { filename, mimetype, category, tags, size, blobPath, blobUrl, folderId } =
       req.body || {};
     if (!filename || !blobPath || !blobUrl) {
@@ -55,14 +85,15 @@ documentsRouter.post("/", async (req, res, next) => {
       return res.status(400).json({ error: "Chemin de blob non autorisé." });
     }
     const doc = await registerDocument(req.ownerId, {
+      space,
       filename,
       mimetype: mimetype || "application/octet-stream",
       category: category || "divers",
       tags: Array.isArray(tags) ? tags.filter(Boolean) : [],
       size: Number(size) || 0,
       source: "web",
-      // Un folderId inconnu ou étranger est simplement ignoré (null).
-      folderId: await resolveFolderId(req.ownerId, folderId),
+      // Un folderId inconnu, étranger ou d'un autre espace est simplement ignoré (null).
+      folderId: await resolveFolderId(req.ownerId, space, folderId),
       blobPath,
       blobUrl,
     });
@@ -75,18 +106,22 @@ documentsRouter.post("/", async (req, res, next) => {
 // Extraction automatique des informations clés (modèle, type, version, tags)
 // puis classement : dossier créé/retrouvé d'après le modèle détecté, catégorie
 // et tags complétés. Les choix explicites de l'utilisateur ne sont jamais
-// écrasés (dossier déjà choisi, catégorie autre que « divers »).
+// écrasés (dossier déjà choisi, catégorie autre que « divers »). Pro
+// uniquement dans les faits (le perso n'a pas de dossiers), mais la route
+// reste générique et exige `space` comme les autres.
 documentsRouter.post("/:id/analyze", async (req, res, next) => {
   try {
-    const doc = await getDocument(req.ownerId, req.params.id);
+    const space = parseSpace(req.body?.space);
+    if (!space) return res.status(400).json(SPACE_ERROR);
+    const doc = await getDocument(req.ownerId, req.params.id, space);
     if (!doc) return res.status(404).json({ error: "Document introuvable." });
 
     const extracted = await extractDocumentText(doc);
     if (!extracted.ok) return res.json({ analyzed: false, reason: extracted.reason });
 
     const [{ folders }, categories] = await Promise.all([
-      listFolders(req.ownerId),
-      listCategories(req.ownerId),
+      listFolders(req.ownerId, space),
+      listCategories(req.ownerId, space),
     ]);
     const detected = await analyzeDocumentText({
       filename: doc.filename,
@@ -97,7 +132,7 @@ documentsRouter.post("/:id/analyze", async (req, res, next) => {
     if (!detected) return res.json({ analyzed: false, reason: "Analyse impossible." });
 
     if (detected.model && !doc.folderId) {
-      const folder = await getOrCreateFolder(req.ownerId, detected.model);
+      const folder = await getOrCreateFolder(req.ownerId, space, detected.model);
       doc.folderId = folder._id;
     }
     if (detected.category && (!doc.category || doc.category === "divers")) {
@@ -118,7 +153,9 @@ documentsRouter.post("/:id/analyze", async (req, res, next) => {
 
 documentsRouter.get("/:id", async (req, res, next) => {
   try {
-    const doc = await getDocument(req.ownerId, req.params.id);
+    const space = parseSpace(req.query.space);
+    if (!space) return res.status(400).json(SPACE_ERROR);
+    const doc = await getDocument(req.ownerId, req.params.id, space);
     if (!doc) return res.status(404).json({ error: "Document introuvable." });
     res.setHeader("Cache-Control", "private, no-store");
     res.json({ document: doc.toClient() });
@@ -130,15 +167,17 @@ documentsRouter.get("/:id", async (req, res, next) => {
 // Mise à jour des métadonnées (dont rattachement à un dossier).
 documentsRouter.patch("/:id", async (req, res, next) => {
   try {
+    const space = parseSpace(req.body?.space);
+    if (!space) return res.status(400).json(SPACE_ERROR);
     const { filename, category, tags, description, folderId } = req.body || {};
-    const doc = await updateDocument(req.ownerId, req.params.id, {
+    const doc = await updateDocument(req.ownerId, req.params.id, space, {
       filename,
       category,
       tags: Array.isArray(tags) ? tags.filter(Boolean) : undefined,
       description,
       // folderId : absent = inchangé, null/"" = détacher, sinon dossier validé.
       folderId:
-        folderId === undefined ? undefined : await resolveFolderId(req.ownerId, folderId),
+        folderId === undefined ? undefined : await resolveFolderId(req.ownerId, space, folderId),
     });
     if (!doc) return res.status(404).json({ error: "Document introuvable." });
     res.json({ document: doc.toClient() });
@@ -151,7 +190,9 @@ documentsRouter.patch("/:id", async (req, res, next) => {
 // côté serveur via BLOB_READ_WRITE_TOKEN → flux streamé au client.
 documentsRouter.get("/:id/file", async (req, res, next) => {
   try {
-    const doc = await getDocument(req.ownerId, req.params.id);
+    const space = parseSpace(req.query.space);
+    if (!space) return res.status(400).json(SPACE_ERROR);
+    const doc = await getDocument(req.ownerId, req.params.id, space);
     if (!doc) return res.status(404).json({ error: "Document introuvable." });
 
     const blobRes = await fetchBlobResponse(doc);
@@ -178,7 +219,9 @@ documentsRouter.get("/:id/file", async (req, res, next) => {
 
 documentsRouter.delete("/:id", async (req, res, next) => {
   try {
-    const deleted = await deleteDocument(req.ownerId, req.params.id);
+    const space = parseSpace(req.query.space);
+    if (!space) return res.status(400).json(SPACE_ERROR);
+    const deleted = await deleteDocument(req.ownerId, req.params.id, space);
     if (!deleted) return res.status(404).json({ error: "Document introuvable." });
     res.json({ ok: true });
   } catch (err) {

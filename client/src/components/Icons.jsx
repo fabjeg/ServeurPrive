@@ -90,6 +90,43 @@ export const IconImage = (p) => (
   </Icon>
 );
 
+// Assistant virtuel — tête arrondie, antenne, yeux et sourire en trait :
+// signale sans ambiguïté « ceci est un bot », dans le même vocabulaire
+// graphique (trait, currentColor) que le reste de l'iconographie Frigo.
+export const IconBot = (p) => (
+  <Icon {...p}>
+    <path d="M12 3v3" />
+    <circle cx="12" cy="3" r="1.1" fill="currentColor" stroke="none" />
+    <rect x="4.5" y="7.5" width="15" height="11.5" rx="3.5" />
+    <path d="M9 12.5v1.5M15 12.5v1.5" />
+    <path d="M9.3 16.3c.8.6 1.7.9 2.7.9s1.9-.3 2.7-.9" />
+    <path d="M2.5 11v3.5M21.5 11v3.5" />
+  </Icon>
+);
+
+// Petite étincelle — badge « propulsé par l'IA », accolée au bot.
+export const IconSparkle = (p) => (
+  <Icon {...p}>
+    <path d="M12 3l1.4 5.6L19 10l-5.6 1.4L12 17l-1.4-5.6L5 10l5.6-1.4z" strokeLinejoin="round" />
+  </Icon>
+);
+
+export const IconSend = (p) => (
+  <Icon {...p}>
+    <path d="M21 3L14.5 21l-3.5-8-8-3.5z" strokeLinejoin="round" />
+    <path d="M21 3L11 13" />
+  </Icon>
+);
+
+export const IconTrash = (p) => (
+  <Icon {...p}>
+    <path d="M4.5 7h15" />
+    <path d="M9 7V5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 5v2" />
+    <path d="M6.5 7l.9 12.4A1.5 1.5 0 0 0 8.9 21h6.2a1.5 1.5 0 0 0 1.5-1.6L17.5 7" />
+    <path d="M10 11v6M14 11v6" />
+  </Icon>
+);
+
 // Icône de tuile selon la catégorie de documents (heuristique simple).
 export function categoryIcon(name) {
   if (/schema|schéma|plan|electr/i.test(name)) return IconSchema;

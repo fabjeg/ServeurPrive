@@ -6,7 +6,7 @@ import { useBackClose } from "../hooks/useBackClose.js";
 // Viewer multi-format : s'adapte au mimetype. Toutes les sources pointent vers
 // la route proxy authentifiée — jamais d'URL Blob directe.
 export function Viewer({ doc, onClose, onDelete, action }) {
-  const fileUrl = api.fileUrl(doc.id);
+  const fileUrl = api.fileUrl(doc.space, doc.id);
   const isImage = doc.mimetype.startsWith("image/");
   const isPdf = doc.mimetype === "application/pdf";
   const isText = doc.mimetype.startsWith("text/");
@@ -29,7 +29,7 @@ export function Viewer({ doc, onClose, onDelete, action }) {
                 {action.label}
               </button>
             )}
-            <a className="btn" href={api.downloadUrl(doc.id)}>
+            <a className="btn" href={api.downloadUrl(doc.space, doc.id)}>
               Télécharger
             </a>
             {onDelete && (
@@ -45,12 +45,12 @@ export function Viewer({ doc, onClose, onDelete, action }) {
 
         <div className="viewer__stage">
           {isImage && <img src={fileUrl} alt={doc.filename} />}
-          {isPdf && <PdfViewer url={fileUrl} downloadUrl={api.downloadUrl(doc.id)} />}
+          {isPdf && <PdfViewer url={fileUrl} downloadUrl={api.downloadUrl(doc.space, doc.id)} />}
           {isText && <iframe src={fileUrl} title={doc.filename} className="viewer__text" />}
           {!isImage && !isPdf && !isText && (
             <div className="viewer__fallback">
               <p>Pas de prévisualisation pour ce format ({doc.mimetype}).</p>
-              <a className="btn btn--primary" href={api.downloadUrl(doc.id)}>
+              <a className="btn btn--primary" href={api.downloadUrl(doc.space, doc.id)}>
                 Télécharger le fichier
               </a>
             </div>

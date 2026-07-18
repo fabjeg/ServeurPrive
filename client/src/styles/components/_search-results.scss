@@ -1,0 +1,39 @@
+@use "../abstracts/variables" as *;
+@use "../abstracts/mixins" as *;
+
+// Résultats de recherche full-text (espace pro) : extrait de contexte sous
+// chaque résultat, comme un aperçu de moteur de recherche.
+.search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+
+  &__open {
+    @include surface;
+    @include focus-ring;
+    width: 100%;
+    text-align: left;
+    padding: 0.75rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+
+    &:hover {
+      border-color: var(--accent);
+    }
+  }
+
+  &__name {
+    font-weight: 600;
+  }
+
+  &__meta {
+    @include stamp;
+  }
+
+  &__excerpt {
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+}

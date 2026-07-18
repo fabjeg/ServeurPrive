@@ -52,7 +52,7 @@ export function DocumentCard({ doc, onOpen, onDelete }) {
         </span>
       </button>
       <div className="doc-card__actions">
-        <a className="doc-card__action" href={api.downloadUrl(doc.id)} title="Télécharger">
+        <a className="doc-card__action" href={api.downloadUrl(doc.space, doc.id)} title="Télécharger">
           ↓
         </a>
         <button

@@ -3,6 +3,9 @@ import mongoose from "mongoose";
 
 const documentSchema = new mongoose.Schema(
   {
+    // Cloisonnement pro/perso — toute route et tout accès MCP doivent filtrer
+    // dessus. default "pro" pour la rétrocompatibilité (voir scripts/migrate-space.js).
+    space: { type: String, enum: ["pro", "perso"], required: true, default: "pro" },
     filename: { type: String, required: true, trim: true },
     mimetype: { type: String, required: true },
     category: { type: String, default: "divers", trim: true, lowercase: true },
@@ -28,18 +31,32 @@ const documentSchema = new mongoose.Schema(
       enum: ["pending", "done", "failed", "skipped"],
       default: "pending",
     },
+    // Texte extrait à l'upload (PDF/texte) — sert au résumé Gemini ET à
+    // l'index full-text ci-dessous, une seule extraction (voir
+    // server/services/documents.js:processNewDocument). Jamais renvoyé au
+    // client (potentiellement long), voir toClient().
+    extractedText: { type: String, default: "" },
     uploadedAt: { type: Date, default: Date.now },
   },
   { versionKey: false }
 );
 
 documentSchema.index({ ownerId: 1, category: 1, uploadedAt: -1 });
-documentSchema.index({ filename: "text", tags: "text" });
+documentSchema.index({ ownerId: 1, space: 1, uploadedAt: -1 });
+// Un seul index texte possible par collection Mongo : filename pèse le plus
+// lourd (nom de fichier explicite), puis tags, puis le corps extrait. Géré
+// à la main dans scripts/migrate-space.js (pas d'auto-index en prod pour un
+// changement de forme d'index texte existant).
+documentSchema.index(
+  { filename: "text", tags: "text", extractedText: "text" },
+  { weights: { filename: 10, tags: 5, extractedText: 1 }, name: "document_text_search" }
+);
 
 // Représentation publique : sans blobPath/blobUrl.
 documentSchema.methods.toClient = function toClient() {
   return {
     id: this._id.toString(),
+    space: this.space,
     filename: this.filename,
     mimetype: this.mimetype,
     category: this.category,

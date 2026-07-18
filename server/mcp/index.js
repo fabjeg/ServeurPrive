@@ -9,7 +9,7 @@ import { requireMcpAuth, OWNER_ID } from "../lib/auth.js";
 import {
   createDocumentFromBuffer,
   deleteDocument,
-  getDocument,
+  getDocumentAnySpace,
   listDocuments,
   updateDocument,
 } from "../services/documents.js";
@@ -25,6 +25,19 @@ import {
   listFolders,
   updateIntervention,
 } from "../services/folders.js";
+
+// Le connecteur MCP ne voit JAMAIS l'espace personnel — cette constante est
+// la SEULE source de vérité du space utilisé par tous les tools ci-dessous.
+// Aucun inputSchema Zod n'expose de champ `space` : impossible pour Claude
+// d'en fournir un, donc impossible de le faire dévier de "pro".
+const SPACE = "pro";
+
+// Message renvoyé quand un id fourni par Claude désigne bien un document
+// existant, mais hors de l'espace pro — jamais un simple "introuvable" qui
+// masquerait qu'il s'agit d'un refus d'accès délibéré, pas d'une absence.
+function accessDeniedMessage(id) {
+  return `Accès refusé : le document ${id} appartient à l'espace personnel, non accessible depuis l'assistant.`;
+}
 
 // add_document : le contenu transite par la fonction serverless (plafond Vercel
 // 4,5 Mo) et le base64 gonfle de ~33 % → limite utile ~3 Mo de fichier décodé.
@@ -84,11 +97,12 @@ function buildServer() {
     async ({ category, tag, folder, limit }) => {
       let folderId;
       if (folder) {
-        const f = await findFolderByName(OWNER_ID, folder);
+        const f = await findFolderByName(OWNER_ID, SPACE, folder);
         if (!f) return textResult(`Dossier « ${folder} » introuvable (voir list_folders).`);
         folderId = f._id.toString();
       }
       const docs = await listDocuments(OWNER_ID, {
+        space: SPACE,
         category,
         tag,
         folder: folderId,
@@ -109,7 +123,7 @@ function buildServer() {
       },
     },
     async ({ query }) => {
-      const docs = await listDocuments(OWNER_ID, { q: query, limit: 50 });
+      const docs = await listDocuments(OWNER_ID, { space: SPACE, q: query, limit: 50 });
       if (!docs.length) return textResult(`Aucun document trouvé pour « ${query} ».`);
       return textResult(
         `${docs.length} résultat(s) pour « ${query} » :\n${docs.map(docLine).join("\n")}`
@@ -128,8 +142,9 @@ function buildServer() {
       },
     },
     async ({ id }) => {
-      const doc = await getDocument(OWNER_ID, id);
+      const doc = await getDocumentAnySpace(OWNER_ID, id);
       if (!doc) return textResult(`Document ${id} introuvable.`);
+      if (doc.space !== SPACE) return textResult(accessDeniedMessage(id));
 
       const header =
         `Fichier : ${doc.filename}\nType : ${doc.mimetype}\nCatégorie : ${doc.category}\n` +
@@ -247,7 +262,7 @@ function buildServer() {
       // Le nom sert de base au chemin blob : on neutralise les séparateurs
       // pour rester sous documents/<owner>/ (même règle que l'upload web).
       const safeName = filename.replace(/[/\\]/g, "_");
-      const folderDoc = folder ? await getOrCreateFolder(OWNER_ID, folder) : null;
+      const folderDoc = folder ? await getOrCreateFolder(OWNER_ID, SPACE, folder) : null;
       const doc = await createDocumentFromBuffer(OWNER_ID, {
         filename: safeName,
         mimetype,
@@ -258,6 +273,7 @@ function buildServer() {
         sourceUrl: source_url,
         description,
         folderId: folderDoc?._id,
+        space: SPACE,
       });
       return textResult(
         `Document déposé dans le coffre${folderDoc ? ` (dossier « ${folderDoc.name} »)` : ""} :\n${docLine(doc)}`
@@ -308,11 +324,15 @@ function buildServer() {
           "Aucun changement demandé : fournir filename, category, tags, description et/ou folder."
         );
       }
+      const existing = await getDocumentAnySpace(OWNER_ID, id);
+      if (!existing) return textResult(`Document ${id} introuvable.`);
+      if (existing.space !== SPACE) return textResult(accessDeniedMessage(id));
+
       let folderId;
       if (folder !== undefined) {
-        folderId = folder.trim() ? (await getOrCreateFolder(OWNER_ID, folder))._id : null;
+        folderId = folder.trim() ? (await getOrCreateFolder(OWNER_ID, SPACE, folder))._id : null;
       }
-      const doc = await updateDocument(OWNER_ID, id, {
+      const doc = await updateDocument(OWNER_ID, id, SPACE, {
         filename: filename?.replace(/[/\\]/g, "_"),
         category,
         tags,
@@ -348,10 +368,11 @@ function buildServer() {
             "puis rappelle ce tool avec confirmed: true."
         );
       }
-      const doc = await getDocument(OWNER_ID, id);
+      const doc = await getDocumentAnySpace(OWNER_ID, id);
       if (!doc) return textResult(`Document ${id} introuvable.`);
+      if (doc.space !== SPACE) return textResult(accessDeniedMessage(id));
       const filename = doc.filename;
-      await deleteDocument(OWNER_ID, id);
+      await deleteDocument(OWNER_ID, id, SPACE);
       return textResult(`Document « ${filename} » supprimé définitivement (fichier + métadonnées).`);
     }
   );
@@ -366,7 +387,7 @@ function buildServer() {
       inputSchema: {},
     },
     async () => {
-      const { folders, unfiledCount } = await listFolders(OWNER_ID);
+      const { folders, unfiledCount } = await listFolders(OWNER_ID, SPACE);
       if (!folders.length && !unfiledCount) {
         return textResult("Aucun dossier pour l'instant.");
       }
@@ -392,9 +413,9 @@ function buildServer() {
       },
     },
     async ({ name }) => {
-      const folder = await findFolderByName(OWNER_ID, name);
+      const folder = await findFolderByName(OWNER_ID, SPACE, name);
       if (!folder) return textResult(`Dossier « ${name} » introuvable (voir list_folders).`);
-      const detail = await getFolderDetail(OWNER_ID, folder._id.toString());
+      const detail = await getFolderDetail(OWNER_ID, folder._id.toString(), SPACE);
       const { documents, interventions, stats } = detail;
       const parts = [
         `Dossier : ${detail.folder.name}` +
@@ -451,8 +472,8 @@ function buildServer() {
       },
     },
     async ({ folder, title, note, duration_minutes, steps }) => {
-      const folderDoc = await getOrCreateFolder(OWNER_ID, folder);
-      const intervention = await createIntervention(OWNER_ID, folderDoc._id.toString(), {
+      const folderDoc = await getOrCreateFolder(OWNER_ID, SPACE, folder);
+      const intervention = await createIntervention(OWNER_ID, folderDoc._id.toString(), SPACE, {
         title,
         note,
         durationMinutes: duration_minutes,
@@ -560,9 +581,9 @@ function buildServer() {
             "puis rappelle ce tool avec confirmed: true."
         );
       }
-      const folder = await findFolderByName(OWNER_ID, name);
+      const folder = await findFolderByName(OWNER_ID, SPACE, name);
       if (!folder) return textResult(`Dossier « ${name} » introuvable.`);
-      await deleteFolder(OWNER_ID, folder._id.toString());
+      await deleteFolder(OWNER_ID, folder._id.toString(), SPACE);
       return textResult(
         `Dossier « ${folder.name} » supprimé (interventions supprimées, documents conservés non classés).`
       );

@@ -1,0 +1,85 @@
+@use "../abstracts/variables" as *;
+@use "../abstracts/mixins" as *;
+
+.space-home {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 1.5rem;
+
+  &__card {
+    @include surface;
+    background: var(--surface-raised);
+    width: min(480px, 100%);
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    box-shadow: var(--shadow-1);
+  }
+
+  &__brand {
+    font-family: $font-display;
+    font-size: var(--fs-2xl);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1;
+  }
+
+  &__tagline {
+    @include stamp;
+  }
+
+  &__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+
+    @media (max-width: 480px) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  &__tile {
+    @include focus-ring;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 1.25rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: $radius;
+    text-align: left;
+
+    &:hover {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+  }
+
+  &__tile-name {
+    font-family: $font-display;
+    font-size: var(--fs-lg);
+    font-weight: 600;
+  }
+
+  &__tile-desc {
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
+  }
+
+  &__appearance {
+    display: flex;
+    justify-content: center;
+  }
+
+  &__logout {
+    @include stamp;
+    @include focus-ring;
+    text-align: center;
+    padding: 0.4rem 0;
+
+    &:hover {
+      color: var(--text);
+    }
+  }
+}

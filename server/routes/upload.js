@@ -41,14 +41,19 @@ uploadRouter.post("/", async (req, res) => {
         // le client fait aussi une confirmation explicite, l'upsert déduplique.
         const payload = JSON.parse(tokenPayload || "{}");
         const meta = JSON.parse(payload.clientPayload || "{}");
-        await registerDocument(payload.ownerId || OWNER_ID, {
+        const ownerId = payload.ownerId || OWNER_ID;
+        // space vient du clientPayload envoyé par UploadPanel — jamais de
+        // défaut silencieux : si absent/invalide, registerDocument lève.
+        const space = meta.space;
+        await registerDocument(ownerId, {
+          space,
           filename: meta.filename || blob.pathname.split("/").pop(),
           mimetype: meta.mimetype || blob.contentType || "application/octet-stream",
           category: meta.category || "divers",
           tags: Array.isArray(meta.tags) ? meta.tags : [],
           size: meta.size || 0,
           source: "web",
-          folderId: await resolveFolderId(payload.ownerId || OWNER_ID, meta.folderId),
+          folderId: await resolveFolderId(ownerId, space, meta.folderId),
           blobPath: blob.pathname,
           blobUrl: blob.url,
         });

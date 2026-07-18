@@ -13,6 +13,12 @@ import { getFolderDetail, listFolders } from "../services/folders.js";
 
 export const chatRouter = Router();
 
+// Le chatbot web n'existe que dans l'espace pro (décision produit : pas
+// d'assistant IA en perso, documents sensibles type fiches de paie/contrats).
+// Comme pour le MCP, cette constante est codée en dur et jamais dérivée du
+// body de la requête — le client ne peut pas la faire dévier.
+const SPACE = "pro";
+
 const MAX_HISTORY_MESSAGES = 30;
 
 const SYSTEM_PROMPT = `Tu es l'assistant du coffre documentaire « Frigo » d'un technicien frigoriste.
@@ -97,6 +103,7 @@ async function runTool(ownerId, name, input) {
   switch (name) {
     case "search_documents": {
       const docs = await listDocuments(ownerId, {
+        space: SPACE,
         q: input.q,
         folder: input.folder_id,
         limit: 25,
@@ -105,7 +112,7 @@ async function runTool(ownerId, name, input) {
       return { results: docs.map((d) => docSummary(d.toClient ? d.toClient() : d)) };
     }
     case "read_document": {
-      const doc = await getDocument(ownerId, String(input.id || ""));
+      const doc = await getDocument(ownerId, String(input.id || ""), SPACE);
       if (!doc) return { error: "Document introuvable." };
       const extracted = await extractDocumentText(doc);
       if (!extracted.ok) return { filename: doc.filename, error: extracted.reason };
@@ -117,7 +124,7 @@ async function runTool(ownerId, name, input) {
       };
     }
     case "list_folders": {
-      const { folders, unfiledCount } = await listFolders(ownerId);
+      const { folders, unfiledCount } = await listFolders(ownerId, SPACE);
       return {
         folders: folders.map((f) => ({
           id: f.id,
@@ -130,7 +137,7 @@ async function runTool(ownerId, name, input) {
       };
     }
     case "get_folder": {
-      const detail = await getFolderDetail(ownerId, String(input.id || ""));
+      const detail = await getFolderDetail(ownerId, String(input.id || ""), SPACE);
       if (!detail) return { error: "Dossier introuvable." };
       return {
         folder: detail.folder,
@@ -169,7 +176,7 @@ chatRouter.post("/", requireAuth, async (req, res) => {
   // de blocs multiples avec cache_control comme l'API Anthropic).
   let system = SYSTEM_PROMPT;
   if (typeof req.body?.documentId === "string" && req.body.documentId) {
-    const doc = await getDocument(req.ownerId, req.body.documentId).catch(() => null);
+    const doc = await getDocument(req.ownerId, req.body.documentId, SPACE).catch(() => null);
     if (doc) {
       system +=
         `\n\nL'utilisateur a actuellement ouvert le document « ${doc.filename} » ` +

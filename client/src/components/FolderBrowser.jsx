@@ -10,7 +10,7 @@ import { useBackClose } from "../hooks/useBackClose.js";
 // documents avant de le choisir comme destination d'upload. Si onPickDoc est
 // fourni, un document existant peut aussi être sélectionné (rangé dans la
 // destination courante).
-export function FolderBrowser({ folders = [], selectedId, onSelect, onClose, onPickDoc }) {
+export function FolderBrowser({ space, folders = [], selectedId, onSelect, onClose, onPickDoc }) {
   const [query, setQuery] = useState("");
   // null = racine ; { id, name } = dossier ouvert (id "" = non classés).
   const [open, setOpen] = useState(null);
@@ -24,10 +24,10 @@ export function FolderBrowser({ folders = [], selectedId, onSelect, onClose, onP
     if (!open) return;
     setDocs(null);
     const load = open.id
-      ? api.folderDetail(open.id).then((res) => res.documents)
-      : api.listDocuments({ folder: "none" }).then((res) => res.documents);
+      ? api.folderDetail(space, open.id).then((res) => res.documents)
+      : api.listDocuments(space, { folder: "none" }).then((res) => res.documents);
     load.then(setDocs).catch(() => setDocs([]));
-  }, [open]);
+  }, [space, open]);
 
   const q = query.trim().toLowerCase();
   const visibleFolders = q ? folders.filter((f) => f.name.includes(q)) : folders;

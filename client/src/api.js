@@ -1,4 +1,7 @@
 // Client API : toutes les requêtes portent le cookie de session (httpOnly).
+// Cloisonnement pro/perso : chaque fonction qui touche des documents/dossiers
+// prend `space` en premier argument — jamais de défaut silencieux, pour ne
+// jamais risquer d'envoyer une requête vers le mauvais espace.
 async function request(path, options = {}) {
   const res = await fetch(path, {
     credentials: "same-origin",
@@ -16,6 +19,13 @@ async function request(path, options = {}) {
   return data;
 }
 
+function withSpace(space, params = {}) {
+  const qs = new URLSearchParams();
+  qs.set("space", space);
+  for (const [k, v] of Object.entries(params)) if (v) qs.set(k, v);
+  return qs.toString();
+}
+
 export const api = {
   authConfig: () => request("/api/auth/config"),
   me: () => request("/api/auth/me"),
@@ -23,33 +33,36 @@ export const api = {
     request("/api/auth/login", { method: "POST", body: { email, password, totp } }),
   logout: () => request("/api/auth/logout", { method: "POST" }),
 
-  listDocuments: (filters = {}) => {
-    const params = new URLSearchParams();
-    for (const [k, v] of Object.entries(filters)) if (v) params.set(k, v);
-    const qs = params.toString();
-    return request(`/api/documents${qs ? `?${qs}` : ""}`);
-  },
-  listCategories: () => request("/api/documents/categories"),
-  registerDocument: (meta) => request("/api/documents", { method: "POST", body: meta }),
-  updateDocument: (id, patch) =>
-    request(`/api/documents/${id}`, { method: "PATCH", body: patch }),
-  deleteDocument: (id) => request(`/api/documents/${id}`, { method: "DELETE" }),
-  analyzeDocument: (id) => request(`/api/documents/${id}/analyze`, { method: "POST", body: {} }),
+  listDocuments: (space, filters = {}) =>
+    request(`/api/documents?${withSpace(space, filters)}`),
+  searchDocuments: (space, q) => request(`/api/documents/search?${withSpace(space, { q })}`),
+  listCategories: (space) => request(`/api/documents/categories?${withSpace(space)}`),
+  registerDocument: (space, meta) =>
+    request("/api/documents", { method: "POST", body: { ...meta, space } }),
+  updateDocument: (space, id, patch) =>
+    request(`/api/documents/${id}`, { method: "PATCH", body: { ...patch, space } }),
+  deleteDocument: (space, id) =>
+    request(`/api/documents/${id}?${withSpace(space)}`, { method: "DELETE" }),
+  analyzeDocument: (space, id) =>
+    request(`/api/documents/${id}/analyze`, { method: "POST", body: { space } }),
 
-  // Dossiers (référentiels par modèle de frigo) et interventions.
-  listFolders: () => request("/api/folders"),
-  folderDetail: (id) => request(`/api/folders/${id}`),
-  createFolder: (body) => request("/api/folders", { method: "POST", body }),
-  updateFolder: (id, body) => request(`/api/folders/${id}`, { method: "PATCH", body }),
-  deleteFolder: (id) => request(`/api/folders/${id}`, { method: "DELETE" }),
-  createIntervention: (folderId, body) =>
-    request(`/api/folders/${folderId}/interventions`, { method: "POST", body }),
+  // Dossiers (référentiels par modèle de frigo, pro uniquement côté UI) et interventions.
+  listFolders: (space) => request(`/api/folders?${withSpace(space)}`),
+  folderDetail: (space, id) => request(`/api/folders/${id}?${withSpace(space)}`),
+  createFolder: (space, body) =>
+    request("/api/folders", { method: "POST", body: { ...body, space } }),
+  updateFolder: (space, id, body) =>
+    request(`/api/folders/${id}`, { method: "PATCH", body: { ...body, space } }),
+  deleteFolder: (space, id) =>
+    request(`/api/folders/${id}?${withSpace(space)}`, { method: "DELETE" }),
+  createIntervention: (space, folderId, body) =>
+    request(`/api/folders/${folderId}/interventions`, { method: "POST", body: { ...body, space } }),
   updateIntervention: (folderId, id, body) =>
     request(`/api/folders/${folderId}/interventions/${id}`, { method: "PATCH", body }),
   deleteIntervention: (folderId, id) =>
     request(`/api/folders/${folderId}/interventions/${id}`, { method: "DELETE" }),
 
   // URLs du proxy authentifié — jamais d'URL Blob directe.
-  fileUrl: (id) => `/api/documents/${id}/file`,
-  downloadUrl: (id) => `/api/documents/${id}/file?download=1`,
+  fileUrl: (space, id) => `/api/documents/${id}/file?${withSpace(space)}`,
+  downloadUrl: (space, id) => `/api/documents/${id}/file?${withSpace(space, { download: "1" })}`,
 };

@@ -1,7 +1,6 @@
 // Résumé automatique des documents à l'upload (web et MCP) — toujours
 // best-effort : un échec (quota Gemini, PDF illisible, réseau) ne doit jamais
 // remonter à l'appelant ni faire échouer l'upload. Voir generateSummary().
-import { extractContent } from "./extractContent.js";
 import { connectDb } from "../lib/db.js";
 import { askLLM } from "../lib/llm.js";
 import { Document } from "../models/Document.js";
@@ -17,10 +16,11 @@ async function setStatus(docId, fields) {
   await Document.findByIdAndUpdate(docId, fields).catch(() => {});
 }
 
-export async function generateSummary(doc) {
+// `extracted` : résultat déjà calculé par extractContent.js — le contenu
+// n'est jamais extrait deux fois (voir server/services/documents.js:processNewDocument,
+// seul point d'entrée qui appelle extractContent() puis passe le résultat ici).
+export async function generateSummary(doc, extracted) {
   try {
-    const extracted = await extractContent(doc);
-
     if (extracted.kind === "unsupported") {
       await setStatus(doc._id, { summaryStatus: "skipped" });
       return;

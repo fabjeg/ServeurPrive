@@ -1,4 +1,7 @@
 // Logique dossiers (modèles de frigo) + interventions, partagée REST / MCP.
+// Les dossiers sont un concept pro-only côté UI, mais toutes les fonctions
+// qui touchent Folder/Document exigent `space` en défense en profondeur
+// (même garantie de cloisonnement que server/services/documents.js).
 import { connectDb } from "../lib/db.js";
 import { Document } from "../models/Document.js";
 import { Folder } from "../models/Folder.js";
@@ -6,19 +9,26 @@ import { Intervention } from "../models/Intervention.js";
 
 const isObjectId = (id) => /^[0-9a-fA-F]{24}$/.test(String(id || ""));
 
-export async function listFolders(ownerId) {
+function requireSpace(space) {
+  if (space !== "pro" && space !== "perso") {
+    throw new Error(`space invalide ou manquant : ${space}`);
+  }
+}
+
+export async function listFolders(ownerId, space) {
+  requireSpace(space);
   await connectDb();
   const [folders, docCounts, intCounts, unfiled] = await Promise.all([
-    Folder.find({ ownerId }).sort({ name: 1 }),
+    Folder.find({ ownerId, space }).sort({ name: 1 }),
     Document.aggregate([
-      { $match: { ownerId, folderId: { $ne: null } } },
+      { $match: { ownerId, space, folderId: { $ne: null } } },
       { $group: { _id: "$folderId", count: { $sum: 1 } } },
     ]),
     Intervention.aggregate([
       { $match: { ownerId } },
       { $group: { _id: "$folderId", count: { $sum: 1 } } },
     ]),
-    Document.countDocuments({ ownerId, folderId: null }),
+    Document.countDocuments({ ownerId, space, folderId: null }),
   ]);
   const docsBy = new Map(docCounts.map((c) => [c._id.toString(), c.count]));
   const intsBy = new Map(intCounts.map((c) => [c._id.toString(), c.count]));
@@ -32,34 +42,38 @@ export async function listFolders(ownerId) {
   };
 }
 
-export async function getFolder(ownerId, id) {
+export async function getFolder(ownerId, id, space) {
+  requireSpace(space);
   await connectDb();
   if (!isObjectId(id)) return null;
-  return Folder.findOne({ _id: id, ownerId });
+  return Folder.findOne({ _id: id, ownerId, space });
 }
 
-export async function findFolderByName(ownerId, name) {
+export async function findFolderByName(ownerId, space, name) {
+  requireSpace(space);
   await connectDb();
-  return Folder.findOne({ ownerId, name: String(name).trim().toLowerCase() });
+  return Folder.findOne({ ownerId, space, name: String(name).trim().toLowerCase() });
 }
 
-export async function createFolder(ownerId, { name, description }) {
+export async function createFolder(ownerId, space, { name, description }) {
+  requireSpace(space);
   await connectDb();
-  return Folder.create({ ownerId, name, description: description || "" });
+  return Folder.create({ ownerId, space, name, description: description || "" });
 }
 
 // Pour MCP : rattacher un document à un dossier par nom, créé au besoin.
-export async function getOrCreateFolder(ownerId, name) {
+export async function getOrCreateFolder(ownerId, space, name) {
+  requireSpace(space);
   await connectDb();
   return Folder.findOneAndUpdate(
-    { ownerId, name: String(name).trim().toLowerCase() },
-    { $setOnInsert: { ownerId, description: "", createdAt: new Date() } },
+    { ownerId, space, name: String(name).trim().toLowerCase() },
+    { $setOnInsert: { ownerId, space, description: "", createdAt: new Date() } },
     { upsert: true, new: true, runValidators: true }
   );
 }
 
-export async function updateFolder(ownerId, id, { name, description }) {
-  const folder = await getFolder(ownerId, id);
+export async function updateFolder(ownerId, id, space, { name, description }) {
+  const folder = await getFolder(ownerId, id, space);
   if (!folder) return null;
   if (name !== undefined) folder.name = name;
   if (description !== undefined) folder.description = description;
@@ -69,10 +83,10 @@ export async function updateFolder(ownerId, id, { name, description }) {
 
 // Suppression d'un dossier : les documents sont détachés (jamais supprimés),
 // les interventions — qui n'existent que dans ce contexte — sont supprimées.
-export async function deleteFolder(ownerId, id) {
-  const folder = await getFolder(ownerId, id);
+export async function deleteFolder(ownerId, id, space) {
+  const folder = await getFolder(ownerId, id, space);
   if (!folder) return false;
-  await Document.updateMany({ ownerId, folderId: folder._id }, { $set: { folderId: null } });
+  await Document.updateMany({ ownerId, space, folderId: folder._id }, { $set: { folderId: null } });
   await Intervention.deleteMany({ ownerId, folderId: folder._id });
   await folder.deleteOne();
   return true;
@@ -80,11 +94,11 @@ export async function deleteFolder(ownerId, id) {
 
 // Détail complet d'un dossier : documents, répartition par catégorie,
 // interventions et durée moyenne — tout ce qu'affiche la page dossier.
-export async function getFolderDetail(ownerId, id) {
-  const folder = await getFolder(ownerId, id);
+export async function getFolderDetail(ownerId, id, space) {
+  const folder = await getFolder(ownerId, id, space);
   if (!folder) return null;
   const [documents, interventions] = await Promise.all([
-    Document.find({ ownerId, folderId: folder._id }).sort({ uploadedAt: -1 }),
+    Document.find({ ownerId, space, folderId: folder._id }).sort({ uploadedAt: -1 }),
     Intervention.find({ ownerId, folderId: folder._id }).sort({ title: 1 }),
   ]);
   const categories = {};
@@ -107,6 +121,9 @@ export async function getFolderDetail(ownerId, id) {
   };
 }
 
+// Les interventions n'ont pas leur propre champ `space` : l'accès est déjà
+// cadré en amont par le dossier parent (créé/récupéré via un `space` validé,
+// voir createIntervention ci-dessous et les routes qui l'appellent).
 export async function listInterventions(ownerId, folderId) {
   await connectDb();
   if (!isObjectId(folderId)) return [];
@@ -125,9 +142,10 @@ const cleanSteps = (steps) =>
 export async function createIntervention(
   ownerId,
   folderId,
+  space,
   { title, note, durationMinutes, steps }
 ) {
-  const folder = await getFolder(ownerId, folderId);
+  const folder = await getFolder(ownerId, folderId, space);
   if (!folder) return null;
   return Intervention.create({
     ownerId,
@@ -158,9 +176,11 @@ export async function deleteIntervention(ownerId, id) {
 }
 
 // Valide un folderId fourni par le client avant de l'écrire sur un document :
-// null/absent = pas de dossier ; sinon il doit exister et appartenir à l'owner.
-export async function resolveFolderId(ownerId, folderId) {
+// null/absent = pas de dossier ; sinon il doit exister, appartenir à l'owner
+// et au même space que le document (sinon on pourrait rattacher un document
+// perso à un dossier pro ou vice versa).
+export async function resolveFolderId(ownerId, space, folderId) {
   if (!folderId) return null;
-  const folder = await getFolder(ownerId, folderId);
+  const folder = await getFolder(ownerId, folderId, space);
   return folder ? folder._id : null;
 }

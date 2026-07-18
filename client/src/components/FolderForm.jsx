@@ -4,7 +4,7 @@ import { useBackClose } from "../hooks/useBackClose.js";
 
 // Création / édition d'un dossier (modèle de frigo). Nom en minuscules,
 // même convention que les catégories — la capitalisation est faite en CSS.
-export function FolderForm({ folder, onClose, onSaved }) {
+export function FolderForm({ space, folder, onClose, onSaved }) {
   const [name, setName] = useState(folder?.name || "");
   const [description, setDescription] = useState(folder?.description || "");
   const [error, setError] = useState("");
@@ -19,7 +19,9 @@ export function FolderForm({ folder, onClose, onSaved }) {
     setError("");
     try {
       const body = { name: name.trim().toLowerCase(), description: description.trim() };
-      const res = folder ? await api.updateFolder(folder.id, body) : await api.createFolder(body);
+      const res = folder
+        ? await api.updateFolder(folder.space, folder.id, body)
+        : await api.createFolder(space, body);
       onSaved(res.folder);
     } catch (err) {
       setError(err.message || "Échec de l'enregistrement.");

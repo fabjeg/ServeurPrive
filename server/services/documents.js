@@ -4,18 +4,26 @@ import { waitUntil } from "@vercel/functions";
 import { connectDb } from "../lib/db.js";
 import { env } from "../lib/env.js";
 import { Document } from "../models/Document.js";
+import { extractContent } from "./extractContent.js";
 import { generateSummary } from "./summarize.js";
 
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function requireSpace(space) {
+  if (space !== "pro" && space !== "perso") {
+    throw new Error(`space invalide ou manquant : ${space}`);
+  }
+}
+
 export async function listDocuments(
   ownerId,
-  { category, tag, q, from, to, folder, limit = 200 } = {}
+  { space, category, tag, q, from, to, folder, limit = 200 } = {}
 ) {
+  requireSpace(space);
   await connectDb();
-  const filter = { ownerId };
+  const filter = { ownerId, space };
   if (category) filter.category = category.toLowerCase();
   // folder : "none" = documents non classés, sinon id de dossier.
   if (folder === "none") filter.folderId = null;
@@ -33,18 +41,30 @@ export async function listDocuments(
   return Document.find(filter).sort({ uploadedAt: -1 }).limit(Math.min(limit, 500));
 }
 
-export async function getDocument(ownerId, id) {
+export async function getDocument(ownerId, id, space) {
+  requireSpace(space);
+  await connectDb();
+  if (!/^[0-9a-fA-F]{24}$/.test(id)) return null;
+  return Document.findOne({ _id: id, ownerId, space });
+}
+
+// Lookup SANS filtre space — réservé au MCP, pour distinguer « introuvable »
+// de « existe mais dans l'autre espace » et répondre avec un message de
+// refus explicite plutôt qu'un silence (voir server/mcp/index.js).
+export async function getDocumentAnySpace(ownerId, id) {
   await connectDb();
   if (!/^[0-9a-fA-F]{24}$/.test(id)) return null;
   return Document.findOne({ _id: id, ownerId });
 }
 
 export async function registerDocument(ownerId, meta) {
+  requireSpace(meta.space);
   await connectDb();
   // Upsert par blobPath : l'enregistrement peut arriver deux fois
   // (callback onUploadCompleted + confirmation explicite du client).
   // rawResult permet de distinguer une vraie création (upserted) d'une
-  // confirmation en double, pour ne déclencher le résumé automatique qu'une fois.
+  // confirmation en double, pour ne déclencher le traitement post-upload
+  // (extraction + résumé) qu'une fois.
   const result = await Document.findOneAndUpdate(
     { blobPath: meta.blobPath, ownerId },
     { $setOnInsert: { ...meta, ownerId, uploadedAt: new Date() } },
@@ -60,12 +80,35 @@ export async function registerDocument(ownerId, meta) {
     // jette pas : elle ne fait juste rien (pas de runtime à qui déléguer l'attente),
     // et la promesse continue de s'exécuter normalement en fire-and-forget —
     // donc un seul appel couvre les deux environnements sans branche conditionnelle.
-    const summaryPromise = generateSummary(doc).catch((err) =>
-      console.error("Résumé automatique — erreur inattendue :", err)
+    const processPromise = processNewDocument(doc).catch((err) =>
+      console.error("Traitement post-upload — erreur inattendue :", err)
     );
-    waitUntil(summaryPromise);
+    waitUntil(processPromise);
   }
   return doc;
+}
+
+// Point d'entrée unique du traitement post-upload : extrait le contenu UNE
+// fois (extractContent.js), l'indexe pour la recherche full-text
+// (extractedText), puis génère le résumé Gemini à partir de ce même résultat
+// — jamais deux extractions pour un même document. Best-effort comme
+// generateSummary : ne relance jamais d'exception vers l'appelant.
+export async function processNewDocument(doc) {
+  let extracted;
+  try {
+    extracted = await extractContent(doc);
+  } catch (err) {
+    console.error("Extraction de contenu échouée :", err?.message || err);
+    extracted = { kind: "unsupported" };
+  }
+
+  const extractedText = extracted.kind === "pdf" || extracted.kind === "text" ? extracted.text : "";
+  if (extractedText) {
+    await connectDb();
+    await Document.findByIdAndUpdate(doc._id, { extractedText }).catch(() => {});
+  }
+
+  await generateSummary(doc, extracted);
 }
 
 // Dépôt côté serveur (tool MCP add_document) : mêmes règles que l'upload web —
@@ -73,8 +116,9 @@ export async function registerDocument(ownerId, meta) {
 // Réservé aux petits fichiers : ici le contenu transite par la fonction serverless.
 export async function createDocumentFromBuffer(
   ownerId,
-  { filename, mimetype, category, tags, buffer, source, sourceUrl, description, folderId }
+  { filename, mimetype, category, tags, buffer, source, sourceUrl, description, folderId, space }
 ) {
+  requireSpace(space);
   const blob = await put(`documents/${ownerId}/${filename}`, buffer, {
     access: "private",
     addRandomSuffix: true,
@@ -91,6 +135,7 @@ export async function createDocumentFromBuffer(
     sourceUrl: sourceUrl || "",
     description: description || "",
     folderId: folderId || null,
+    space,
     blobPath: blob.pathname,
     blobUrl: blob.url,
   });
@@ -102,9 +147,10 @@ export async function createDocumentFromBuffer(
 export async function updateDocument(
   ownerId,
   id,
+  space,
   { filename, category, tags, description, folderId }
 ) {
-  const doc = await getDocument(ownerId, id);
+  const doc = await getDocument(ownerId, id, space);
   if (!doc) return null;
   if (filename !== undefined) doc.filename = filename;
   if (category !== undefined) doc.category = category;
@@ -116,21 +162,59 @@ export async function updateDocument(
   return doc;
 }
 
-export async function deleteDocument(ownerId, id) {
-  const doc = await getDocument(ownerId, id);
+export async function deleteDocument(ownerId, id, space) {
+  const doc = await getDocument(ownerId, id, space);
   if (!doc) return false;
   await del(doc.blobUrl, { token: env.blobToken });
   await doc.deleteOne();
   return true;
 }
 
-export async function listCategories(ownerId) {
+export async function listCategories(ownerId, space) {
+  requireSpace(space);
   await connectDb();
   return Document.aggregate([
-    { $match: { ownerId } },
+    { $match: { ownerId, space } },
     { $group: { _id: "$category", count: { $sum: 1 } } },
     { $sort: { _id: 1 } },
   ]);
+}
+
+// Recherche full-text (index Mongo sur filename/tags/extractedText, voir
+// models/Document.js). Renvoie un extrait de contexte autour du premier
+// terme trouvé pour chaque résultat, façon aperçu de résultat de recherche.
+const SNIPPET_RADIUS = 150;
+
+function buildSnippet(text, query) {
+  if (!text) return "";
+  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const lower = text.toLowerCase();
+  let idx = -1;
+  for (const term of terms) {
+    const i = lower.indexOf(term);
+    if (i !== -1 && (idx === -1 || i < idx)) idx = i;
+  }
+  if (idx === -1) return text.slice(0, SNIPPET_RADIUS * 2).trim();
+  const start = Math.max(0, idx - SNIPPET_RADIUS);
+  const end = Math.min(text.length, idx + SNIPPET_RADIUS);
+  return `${start > 0 ? "…" : ""}${text.slice(start, end).trim()}${end < text.length ? "…" : ""}`;
+}
+
+export async function searchDocumentsFullText(ownerId, space, q, limit = 25) {
+  requireSpace(space);
+  await connectDb();
+  const query = String(q || "").trim();
+  if (!query) return [];
+  const docs = await Document.find(
+    { ownerId, space, $text: { $search: query } },
+    { score: { $meta: "textScore" } }
+  )
+    .sort({ score: { $meta: "textScore" } })
+    .limit(Math.min(limit, 100));
+  return docs.map((d) => ({
+    ...d.toClient(),
+    excerpt: buildSnippet(d.extractedText, query),
+  }));
 }
 
 // Récupère le contenu binaire d'un blob privé, côté serveur uniquement,
