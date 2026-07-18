@@ -5,7 +5,12 @@
 import { ApiError, GoogleGenAI } from "@google/genai";
 import { env } from "./env.js";
 
-const MODEL = "gemini-flash-lite-latest";
+// Alias -latest volontairement évité — un changement de modèle silencieux
+// côté Google a déjà cassé le chat une fois (gemini-3.5-flash s'est retrouvé
+// à 20 requêtes/jour gratuites, gemini-2.5-flash fermé aux nouvelles clés).
+// Mettre à jour ce nom manuellement, dans un commit dédié, si besoin de
+// changer de modèle (résolu depuis gemini-flash-lite-latest le 2026-07-18).
+const MODEL = "gemini-3.1-flash-lite";
 const MAX_TOOL_ROUNDS = 6;
 
 // Les tools existants sont déclarés au format Anthropic (name, description,

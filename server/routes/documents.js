@@ -15,7 +15,6 @@ import {
 } from "../services/documents.js";
 import { getOrCreateFolder, listFolders, resolveFolderId } from "../services/folders.js";
 import { analyzeDocumentText } from "../services/analyze.js";
-import { env } from "../lib/env.js";
 
 export const documentsRouter = Router();
 documentsRouter.use(requireAuth);
@@ -79,9 +78,6 @@ documentsRouter.post("/", async (req, res, next) => {
 // écrasés (dossier déjà choisi, catégorie autre que « divers »).
 documentsRouter.post("/:id/analyze", async (req, res, next) => {
   try {
-    if (!env.anthropicApiKey) {
-      return res.json({ analyzed: false, reason: "Analyse non configurée (clé API manquante)." });
-    }
     const doc = await getDocument(req.ownerId, req.params.id);
     if (!doc) return res.status(404).json({ error: "Document introuvable." });
 
