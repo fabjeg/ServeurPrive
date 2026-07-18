@@ -9,11 +9,11 @@ import { requireMcpAuth, OWNER_ID } from "../lib/auth.js";
 import {
   createDocumentFromBuffer,
   deleteDocument,
-  fetchBlobResponse,
   getDocument,
   listDocuments,
   updateDocument,
 } from "../services/documents.js";
+import { extractContent } from "../services/extractContent.js";
 import {
   createIntervention,
   deleteFolder,
@@ -26,11 +26,6 @@ import {
   updateIntervention,
 } from "../services/folders.js";
 
-const TEXT_MIMETYPES = /^(text\/|application\/(json|xml|javascript|x-yaml|csv))/;
-const IMAGE_MIMETYPES = /^image\/(png|jpeg|gif|webp)$/;
-const MAX_INLINE_BYTES = 4 * 1024 * 1024;
-const MAX_PDF_BYTES = 20 * 1024 * 1024; // extraction texte seulement, jamais inline
-const MAX_TEXT_CHARS = 60000;
 // add_document : le contenu transite par la fonction serverless (plafond Vercel
 // 4,5 Mo) et le base64 gonfle de ~33 % → limite utile ~3 Mo de fichier décodé.
 const MAX_ADD_BYTES = 3 * 1024 * 1024;
@@ -49,9 +44,11 @@ const ALLOWED_ADD_MIMETYPES = new Set([
 
 function docLine(d) {
   const kb = Math.round((d.size || 0) / 1024);
+  const summaryPart =
+    d.summaryStatus === "done" && d.summary ? `\n  Résumé : ${d.summary}` : "";
   return `- [${d._id}] ${d.filename} — catégorie: ${d.category}${
     d.tags.length ? `, tags: ${d.tags.join(", ")}` : ""
-  }, ${kb} Ko, ajouté le ${d.uploadedAt.toISOString().slice(0, 10)}`;
+  }, ${kb} Ko, ajouté le ${d.uploadedAt.toISOString().slice(0, 10)}${summaryPart}`;
 }
 
 function textResult(text) {
@@ -141,59 +138,41 @@ function buildServer() {
         (doc.description ? `\nDescription : ${doc.description}` : "") +
         (doc.sourceUrl ? `\nSource : ${doc.sourceUrl}` : "");
 
-      const isPdf = doc.mimetype === "application/pdf";
-      if (doc.size > (isPdf ? MAX_PDF_BYTES : MAX_INLINE_BYTES)) {
-        return textResult(
-          `${header}\n\n(Fichier trop volumineux pour être retourné inline — consultez-le dans l'application Frigo.)`
-        );
-      }
-
-      const blobRes = await fetchBlobResponse(doc);
-      if (!blobRes.ok) return textResult(`${header}\n\n(Contenu inaccessible dans le stockage.)`);
-
-      if (isPdf) {
-        const { PDFParse } = await import("pdf-parse");
-        const buf = new Uint8Array(await blobRes.arrayBuffer());
-        let parser;
-        try {
-          parser = new PDFParse({ data: buf });
-          const parsed = await parser.getText();
-          let text = (parsed.text || "").trim();
-          if (!text) {
-            return textResult(
-              `${header}\nPages : ${parsed.total}\n\n(PDF sans couche texte — probablement un scan. Le contenu n'est pas extractible sans OCR.)`
-            );
-          }
-          const truncated = text.length > MAX_TEXT_CHARS;
-          if (truncated) text = text.slice(0, MAX_TEXT_CHARS);
+      const extracted = await extractContent(doc);
+      switch (extracted.kind) {
+        case "too_large":
           return textResult(
-            `${header}\nPages : ${parsed.total}\n\n--- Contenu extrait ---\n${text}${
-              truncated ? "\n\n[… texte tronqué à 60 000 caractères]" : ""
+            `${header}\n\n(Fichier trop volumineux pour être retourné inline — consultez-le dans l'application Frigo.)`
+          );
+        case "unreachable":
+          return textResult(`${header}\n\n(Contenu inaccessible dans le stockage.)`);
+        case "pdf_no_text":
+          return textResult(
+            `${header}\nPages : ${extracted.pages}\n\n(PDF sans couche texte — probablement un scan. Le contenu n'est pas extractible sans OCR.)`
+          );
+        case "pdf_unreadable":
+          return textResult(`${header}\n\n(PDF illisible — extraction de texte impossible.)`);
+        case "pdf":
+          return textResult(
+            `${header}\nPages : ${extracted.pages}\n\n--- Contenu extrait ---\n${extracted.text}${
+              extracted.truncated ? "\n\n[… texte tronqué à 60 000 caractères]" : ""
             }`
           );
-        } catch {
-          return textResult(`${header}\n\n(PDF illisible — extraction de texte impossible.)`);
-        } finally {
-          await parser?.destroy().catch(() => {});
-        }
+        case "text":
+          return textResult(`${header}\n\n--- Contenu ---\n${extracted.text}`);
+        case "image":
+          return {
+            content: [
+              { type: "text", text: header },
+              { type: "image", data: extracted.base64, mimeType: extracted.mimeType },
+            ],
+          };
+        case "unsupported":
+        default:
+          return textResult(
+            `${header}\n\n(Format binaire — contenu non extractible inline. Utilisez l'application Frigo pour le consulter.)`
+          );
       }
-
-      if (TEXT_MIMETYPES.test(doc.mimetype)) {
-        const text = await blobRes.text();
-        return textResult(`${header}\n\n--- Contenu ---\n${text}`);
-      }
-      if (IMAGE_MIMETYPES.test(doc.mimetype)) {
-        const buf = Buffer.from(await blobRes.arrayBuffer());
-        return {
-          content: [
-            { type: "text", text: header },
-            { type: "image", data: buf.toString("base64"), mimeType: doc.mimetype },
-          ],
-        };
-      }
-      return textResult(
-        `${header}\n\n(Format binaire — contenu non extractible inline. Utilisez l'application Frigo pour le consulter.)`
-      );
     }
   );
 

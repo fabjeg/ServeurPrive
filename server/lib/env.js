@@ -35,6 +35,9 @@ export const env = {
     // Optionnel : le chatbot est désactivé (erreur explicite) si absent.
     return process.env.ANTHROPIC_API_KEY || null;
   },
+  get geminiApiKey() {
+    return required("GEMINI_API_KEY");
+  },
   get isProduction() {
     return process.env.NODE_ENV === "production" || !!process.env.VERCEL;
   },

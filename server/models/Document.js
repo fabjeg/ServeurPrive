@@ -20,6 +20,14 @@ const documentSchema = new mongoose.Schema(
     // URL d'origine quand le document vient du web (traçabilité des dépôts IA).
     sourceUrl: { type: String, default: "", trim: true },
     description: { type: String, default: "", trim: true },
+    // Résumé automatique généré à l'upload (Gemini) — best-effort, jamais
+    // bloquant (voir server/services/summarize.js).
+    summary: { type: String, default: "" },
+    summaryStatus: {
+      type: String,
+      enum: ["pending", "done", "failed", "skipped"],
+      default: "pending",
+    },
     uploadedAt: { type: Date, default: Date.now },
   },
   { versionKey: false }
@@ -41,6 +49,8 @@ documentSchema.methods.toClient = function toClient() {
     source: this.source,
     sourceUrl: this.sourceUrl,
     description: this.description,
+    summary: this.summary,
+    summaryStatus: this.summaryStatus,
     uploadedAt: this.uploadedAt,
   };
 };

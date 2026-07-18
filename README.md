@@ -64,6 +64,11 @@ npm run totp-secret                              # → TOTP_SECRET (2FA, recomma
   projet (Storage → Create → Blob). En local : `vercel env pull .env`.
 - `JWT_SECRET`, `MCP_ACCESS_TOKEN` : longues valeurs aléatoires
   (`openssl rand -hex 32` ou équivalent).
+- `ANTHROPIC_API_KEY` : clé pour le chatbot documentaire (optionnelle) —
+  https://console.anthropic.com (payant, à l'usage).
+- `GEMINI_API_KEY` : clé pour le fournisseur LLM Gemini (`server/lib/llm.js`,
+  optionnel) — gratuite, sans carte bancaire requise :
+  https://aistudio.google.com/apikey (bouton *Create API key*).
 
 ### 4. Développement local (Windows / VS Code)
 

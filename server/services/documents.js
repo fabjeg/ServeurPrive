@@ -1,8 +1,10 @@
 // Logique documentaire partagée entre l'API REST et les tools MCP.
 import { del, put } from "@vercel/blob";
+import { waitUntil } from "@vercel/functions";
 import { connectDb } from "../lib/db.js";
 import { env } from "../lib/env.js";
 import { Document } from "../models/Document.js";
+import { generateSummary } from "./summarize.js";
 
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -41,11 +43,29 @@ export async function registerDocument(ownerId, meta) {
   await connectDb();
   // Upsert par blobPath : l'enregistrement peut arriver deux fois
   // (callback onUploadCompleted + confirmation explicite du client).
-  return Document.findOneAndUpdate(
+  // rawResult permet de distinguer une vraie création (upserted) d'une
+  // confirmation en double, pour ne déclencher le résumé automatique qu'une fois.
+  const result = await Document.findOneAndUpdate(
     { blobPath: meta.blobPath, ownerId },
     { $setOnInsert: { ...meta, ownerId, uploadedAt: new Date() } },
-    { upsert: true, new: true }
+    { upsert: true, new: true, includeResultMetadata: true }
   );
+  const doc = result.value;
+  const isNewDocument = !result.lastErrorObject?.updatedExisting;
+  if (isNewDocument) {
+    // Fire-and-forget : ne bloque jamais la réponse HTTP, n'échoue jamais l'upload.
+    // Sur Vercel, la fonction peut être gelée dès la réponse envoyée — waitUntil()
+    // dit au runtime d'attendre la fin de cette promesse avant de geler l'instance.
+    // Hors contexte Vercel (server/local.js, script node natif), waitUntil() ne
+    // jette pas : elle ne fait juste rien (pas de runtime à qui déléguer l'attente),
+    // et la promesse continue de s'exécuter normalement en fire-and-forget —
+    // donc un seul appel couvre les deux environnements sans branche conditionnelle.
+    const summaryPromise = generateSummary(doc).catch((err) =>
+      console.error("Résumé automatique — erreur inattendue :", err)
+    );
+    waitUntil(summaryPromise);
+  }
+  return doc;
 }
 
 // Dépôt côté serveur (tool MCP add_document) : mêmes règles que l'upload web —
