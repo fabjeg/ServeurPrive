@@ -1,10 +1,9 @@
-// Chatbot documentaire : Claude + outils branchés sur les services existants
+// Chatbot documentaire : Gemini + outils branchés sur les services existants
 // (recherche, extraction texte PDF, dossiers). Réponse en streaming SSE.
 // Même règle que partout : rien sans authentification (requireAuth).
 import { Router } from "express";
-import Anthropic from "@anthropic-ai/sdk";
 import { requireAuth } from "../lib/auth.js";
-import { env } from "../lib/env.js";
+import { friendlyError, runChatLoop } from "../lib/llm-chat.js";
 import {
   extractDocumentText,
   getDocument,
@@ -14,8 +13,6 @@ import { getFolderDetail, listFolders } from "../services/folders.js";
 
 export const chatRouter = Router();
 
-const MODEL = "claude-opus-4-8";
-const MAX_TOOL_ROUNDS = 6;
 const MAX_HISTORY_MESSAGES = 30;
 
 const SYSTEM_PROMPT = `Tu es l'assistant du coffre documentaire « Frigo » d'un technicien frigoriste.
@@ -156,12 +153,6 @@ const TOOL_LABELS = {
 };
 
 chatRouter.post("/", requireAuth, async (req, res) => {
-  if (!env.anthropicApiKey) {
-    return res.status(503).json({
-      error: "Chatbot non configuré : variable ANTHROPIC_API_KEY manquante.",
-    });
-  }
-
   // Historique côté client : uniquement des tours texte (les échanges d'outils
   // d'un tour précédent ne sont pas rejoués — le modèle re-cherche au besoin).
   const history = Array.isArray(req.body?.messages) ? req.body.messages : [];
@@ -173,21 +164,18 @@ chatRouter.post("/", requireAuth, async (req, res) => {
     return res.status(400).json({ error: "Message utilisateur manquant." });
   }
 
-  // Contexte optionnel : le document ouvert dans le viewer. Ajouté comme
-  // second bloc système (après le bloc caché/cachable) pour que le modèle
-  // sache de quel document on parle et le lise directement.
-  const system = [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }];
+  // Contexte optionnel : le document ouvert dans le viewer, ajouté à la suite
+  // du prompt système (Gemini ne gère qu'une instruction système simple, pas
+  // de blocs multiples avec cache_control comme l'API Anthropic).
+  let system = SYSTEM_PROMPT;
   if (typeof req.body?.documentId === "string" && req.body.documentId) {
     const doc = await getDocument(req.ownerId, req.body.documentId).catch(() => null);
     if (doc) {
-      system.push({
-        type: "text",
-        text:
-          `L'utilisateur a actuellement ouvert le document « ${doc.filename} » ` +
-          `(id: ${doc._id}, catégorie: ${doc.category}). Quand il dit « ce document », ` +
-          `« cette notice » ou pose une question sans préciser, il parle de celui-ci : ` +
-          `lis-le avec read_document(id: "${doc._id}") avant de répondre.`,
-      });
+      system +=
+        `\n\nL'utilisateur a actuellement ouvert le document « ${doc.filename} » ` +
+        `(id: ${doc._id}, catégorie: ${doc.category}). Quand il dit « ce document », ` +
+        `« cette notice » ou pose une question sans préciser, il parle de celui-ci : ` +
+        `lis-le avec read_document(id: "${doc._id}") avant de répondre.`;
     }
   }
 
@@ -199,67 +187,35 @@ chatRouter.post("/", requireAuth, async (req, res) => {
     if (!res.writableEnded) res.write(`data: ${JSON.stringify(event)}\n\n`);
   };
 
-  const client = new Anthropic({ apiKey: env.anthropicApiKey });
+  // `res.on("close")`, pas `req.on("close")` : sur ce runtime, l'événement
+  // 'close' de la requête entrante (IncomingMessage) se déclenche dès que son
+  // corps est entièrement consommé (donc quasi immédiatement, bien avant la
+  // fin de la réponse) — pas quand la connexion se ferme réellement. `res`
+  // (ServerResponse) est le bon flux à écouter pour détecter un abandon client.
   let aborted = false;
-  req.on("close", () => {
-    aborted = true;
+  res.on("close", () => {
+    if (!res.writableEnded) aborted = true;
   });
 
   try {
-    for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
-      const stream = client.messages.stream({
-        model: MODEL,
-        max_tokens: 8000,
-        thinking: { type: "adaptive" },
-        system,
-        tools: TOOLS,
-        messages,
-      });
-
-      stream.on("text", (delta) => send({ type: "delta", text: delta }));
-      const message = await stream.finalMessage();
-      if (aborted) return;
-
-      if (message.stop_reason !== "tool_use" || round === MAX_TOOL_ROUNDS) {
-        if (message.stop_reason === "refusal") {
-          send({ type: "error", message: "La demande a été refusée par le modèle." });
-        }
-        send({ type: "done" });
-        return res.end();
-      }
-
-      messages.push({ role: "assistant", content: message.content });
-      const toolResults = [];
-      for (const block of message.content) {
-        if (block.type !== "tool_use") continue;
-        send({ type: "tool", label: TOOL_LABELS[block.name]?.(block.input) || block.name });
-        let result;
-        try {
-          result = await runTool(req.ownerId, block.name, block.input);
-        } catch (err) {
-          console.error(`Tool ${block.name} a échoué :`, err);
-          result = { error: "Erreur interne pendant l'exécution de l'outil." };
-        }
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: block.id,
-          content: JSON.stringify(result),
-          is_error: Boolean(result?.error),
-        });
-      }
-      messages.push({ role: "user", content: toolResults });
-    }
+    await runChatLoop({
+      history: messages,
+      system,
+      tools: TOOLS,
+      runTool: (name, args) => runTool(req.ownerId, name, args),
+      onDelta: (text) => {
+        if (!aborted) send({ type: "delta", text });
+      },
+      onToolCall: ({ name, args }) => {
+        if (!aborted) send({ type: "tool", label: TOOL_LABELS[name]?.(args) || name });
+      },
+    });
+    if (aborted) return;
+    send({ type: "done" });
+    res.end();
   } catch (err) {
     console.error("Erreur chatbot :", err);
-    send({
-      type: "error",
-      message:
-        err instanceof Anthropic.AuthenticationError
-          ? "Clé API Anthropic invalide."
-          : err instanceof Anthropic.RateLimitError
-            ? "Limite d'utilisation atteinte, réessaie dans un instant."
-            : "Erreur du chatbot, réessaie.",
-    });
+    send({ type: "error", message: friendlyError(err) });
     send({ type: "done" });
     res.end();
   }

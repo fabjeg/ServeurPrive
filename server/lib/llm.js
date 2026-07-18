@@ -4,7 +4,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { env } from "./env.js";
 
-const MODEL = "gemini-3.5-flash";
+const MODEL = "gemini-flash-lite-latest";
 
 // Le format `messages` (role/content façon Anthropic/OpenAI) n'est pas celui
 // attendu par le SDK Gemini : les rôles "system" n'existent pas dans
