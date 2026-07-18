@@ -171,7 +171,8 @@ export async function extractDocumentText(doc) {
         truncated,
         text: truncated ? text.slice(0, EXTRACT_MAX_CHARS) : text,
       };
-    } catch {
+    } catch (err) {
+      console.error("Extraction PDF échouée :", err?.message || err);
       return { ok: false, reason: "PDF illisible — extraction impossible." };
     } finally {
       await parser?.destroy().catch(() => {});

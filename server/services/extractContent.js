@@ -48,7 +48,8 @@ export async function extractContent(doc) {
         truncated,
         text: truncated ? text.slice(0, MAX_TEXT_CHARS) : text,
       };
-    } catch {
+    } catch (err) {
+      console.error("Extraction PDF échouée :", err?.message || err);
       return { kind: "pdf_unreadable" };
     } finally {
       await parser?.destroy().catch(() => {});
