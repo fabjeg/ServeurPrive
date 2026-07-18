@@ -1,5 +1,8 @@
 import express from "express";
 import cookieParser from "cookie-parser";
+// Doit être importé avant toute route pouvant charger pdf-parse (extraction
+// PDF) — voir le commentaire du fichier pour le pourquoi.
+import "./lib/pdfjsPolyfill.js";
 import { env } from "./lib/env.js";
 import { authRouter } from "./routes/auth.js";
 import { documentsRouter } from "./routes/documents.js";
