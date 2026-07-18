@@ -1,14 +1,20 @@
 import express from "express";
 import cookieParser from "cookie-parser";
+import { env } from "./lib/env.js";
 import { authRouter } from "./routes/auth.js";
 import { documentsRouter } from "./routes/documents.js";
 import { foldersRouter } from "./routes/folders.js";
 import { uploadRouter } from "./routes/upload.js";
+import { chatRouter } from "./routes/chat.js";
 import { mcpRouter } from "./mcp/index.js";
 
 export const app = express();
 
 app.disable("x-powered-by");
+// Vercel fait tourner l'app derrière un proxy : sans ça, req.ip renverrait
+// l'adresse interne du proxy et pas celle du client, ce qui casserait le
+// rate limiting par IP sur /api/auth/login (voir lib/rateLimit.js).
+if (env.isProduction) app.set("trust proxy", 1);
 // Métadonnées, JSON-RPC et le base64 du tool MCP add_document (≤ ~3 Mo de
 // fichier → ~4 Mo encodé). Les uploads web, eux, ne passent jamais par ici.
 app.use(express.json({ limit: "4.5mb" }));
@@ -18,6 +24,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/upload", uploadRouter);
 app.use("/api/documents", documentsRouter);
 app.use("/api/folders", foldersRouter);
+app.use("/api/chat", chatRouter);
 app.use("/api/mcp/:token", mcpRouter); // jeton dans l'URL (connecteur claude.ai)
 app.use("/api/mcp", mcpRouter); // jeton en Bearer (Claude Code, API)
 

@@ -40,6 +40,7 @@ export function UploadPanel({ folders = [], initialFolderId, onClose, onUploaded
   const [category, setCategory] = useState("");
   const [tags, setTags] = useState("");
   const [progress, setProgress] = useState(null); // { label, percent }
+  const [analysis, setAnalysis] = useState(null); // null | [{ filename, detected?, reason? }]
   const [error, setError] = useState("");
   const inputRef = useRef(null);
   const cameraRef = useRef(null);
@@ -74,7 +75,12 @@ export function UploadPanel({ folders = [], initialFolderId, onClose, onUploaded
       onUploadProgress: ({ percentage }) =>
         setProgress({ label: file.name, percent: Math.round(percentage) }),
     });
-    await api.registerDocument({ ...meta, blobPath: blob.pathname, blobUrl: blob.url });
+    const { document } = await api.registerDocument({
+      ...meta,
+      blobPath: blob.pathname,
+      blobUrl: blob.url,
+    });
+    return document;
   };
 
   const submit = async (e) => {
@@ -90,22 +96,98 @@ export function UploadPanel({ folders = [], initialFolderId, onClose, onUploaded
         setProgress({ label: "Assemblage du scan…", percent: 0 });
         queue.push(await buildScanPdf(scanPages));
       }
+      const uploaded = [];
       for (const file of queue) {
-        await uploadOne(file, {
-          filename: file.name,
-          mimetype: file.type || "application/octet-stream",
-          category: cat,
-          tags: tagList,
-          size: file.size,
-          folderId: folderId || undefined,
-        });
+        uploaded.push(
+          await uploadOne(file, {
+            filename: file.name,
+            mimetype: file.type || "application/octet-stream",
+            category: cat,
+            tags: tagList,
+            size: file.size,
+            folderId: folderId || undefined,
+          })
+        );
       }
-      onUploaded();
+
+      // Extraction automatique des informations clés (PDF uniquement) :
+      // modèle → dossier, type → catégorie, version → tag. Un échec d'analyse
+      // n'annule jamais l'upload — le document est déjà enregistré.
+      const pdfs = uploaded.filter((d) => d.mimetype === "application/pdf");
+      if (pdfs.length) {
+        const results = [];
+        for (const doc of pdfs) {
+          setProgress({ label: `Analyse de ${doc.filename}…`, percent: 100 });
+          try {
+            const r = await api.analyzeDocument(doc.id);
+            results.push({
+              filename: doc.filename,
+              detected: r.analyzed ? r.detected : null,
+              reason: r.analyzed ? null : r.reason,
+            });
+          } catch {
+            results.push({ filename: doc.filename, detected: null, reason: "Analyse impossible." });
+          }
+        }
+        setProgress(null);
+        setAnalysis(results);
+      } else {
+        onUploaded();
+      }
     } catch (err) {
       setError(err.message || "Échec de l'upload.");
       setProgress(null);
     }
   };
+
+  // Écran de synthèse post-analyse : ce que l'app a détecté et rangé.
+  if (analysis) {
+    return (
+      <div className="overlay" role="dialog" aria-modal="true" aria-label="Analyse des documents">
+        <div className="upload-panel">
+          <div className="upload-panel__head">
+            <h2>Informations détectées</h2>
+            <button type="button" className="overlay__close" onClick={onUploaded} aria-label="Fermer">
+              ✕
+            </button>
+          </div>
+          <ul className="upload-panel__analysis">
+            {analysis.map((r) => (
+              <li key={r.filename}>
+                <p className="upload-panel__analysis-file">{r.filename}</p>
+                {r.detected ? (
+                  <dl className="upload-panel__analysis-grid">
+                    <dt>Modèle</dt>
+                    <dd>{r.detected.model || "—"}</dd>
+                    <dt>Type</dt>
+                    <dd>{r.detected.category || "—"}</dd>
+                    <dt>Version</dt>
+                    <dd>{r.detected.version || "—"}</dd>
+                    {r.detected.tags?.length > 0 && (
+                      <>
+                        <dt>Tags</dt>
+                        <dd>{r.detected.tags.join(", ")}</dd>
+                      </>
+                    )}
+                  </dl>
+                ) : (
+                  <p className="upload-panel__analysis-miss">
+                    Non analysé : {r.reason || "raison inconnue"}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p className="upload-panel__hint">
+            Les documents avec un modèle détecté ont été rangés dans le dossier correspondant.
+          </p>
+          <button type="button" className="btn btn--primary" onClick={onUploaded}>
+            Terminer
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="overlay" role="dialog" aria-modal="true" aria-label="Ajouter des documents">

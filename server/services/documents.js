@@ -120,3 +120,49 @@ export async function fetchBlobResponse(doc) {
     headers: { authorization: `Bearer ${env.blobToken}` },
   });
 }
+
+// Texte exploitable d'un document (chatbot). PDF via pdf-parse (classe
+// PDFParse, destroy obligatoire), text/* tel quel ; les autres formats ne
+// sont pas extractibles côté serveur.
+const EXTRACT_MAX_BYTES = 20 * 1024 * 1024;
+const EXTRACT_MAX_CHARS = 40000;
+
+export async function extractDocumentText(doc) {
+  if (doc.size > EXTRACT_MAX_BYTES) {
+    return { ok: false, reason: "Fichier trop volumineux pour l'extraction." };
+  }
+  const blobRes = await fetchBlobResponse(doc);
+  if (!blobRes.ok) return { ok: false, reason: "Contenu inaccessible dans le stockage." };
+
+  if (doc.mimetype === "application/pdf") {
+    const { PDFParse } = await import("pdf-parse");
+    let parser;
+    try {
+      parser = new PDFParse({ data: new Uint8Array(await blobRes.arrayBuffer()) });
+      const parsed = await parser.getText();
+      const text = (parsed.text || "").trim();
+      if (!text) {
+        return { ok: false, reason: "PDF sans couche texte (scan) — non extractible sans OCR." };
+      }
+      const truncated = text.length > EXTRACT_MAX_CHARS;
+      return {
+        ok: true,
+        pages: parsed.total,
+        truncated,
+        text: truncated ? text.slice(0, EXTRACT_MAX_CHARS) : text,
+      };
+    } catch {
+      return { ok: false, reason: "PDF illisible — extraction impossible." };
+    } finally {
+      await parser?.destroy().catch(() => {});
+    }
+  }
+
+  if (/^(text\/|application\/(json|xml|javascript|x-yaml|csv))/.test(doc.mimetype)) {
+    const text = (await blobRes.text()).trim();
+    const truncated = text.length > EXTRACT_MAX_CHARS;
+    return { ok: true, truncated, text: truncated ? text.slice(0, EXTRACT_MAX_CHARS) : text };
+  }
+
+  return { ok: false, reason: `Format ${doc.mimetype} non extractible en texte.` };
+}

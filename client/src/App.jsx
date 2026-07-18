@@ -10,6 +10,7 @@ import { FolderPage } from "./components/FolderPage.jsx";
 import { FolderForm } from "./components/FolderForm.jsx";
 import { UploadPanel } from "./components/UploadPanel.jsx";
 import { Viewer } from "./components/Viewer.jsx";
+import { ChatPanel } from "./components/ChatPanel.jsx";
 import { useTheme } from "./hooks/useTheme.js";
 
 const EMPTY_FILTERS = { q: "" };
@@ -218,6 +219,8 @@ export function App() {
       {viewerDoc && (
         <Viewer doc={viewerDoc} onClose={() => setViewerDoc(null)} onDelete={handleDelete} />
       )}
+
+      <ChatPanel contextDoc={viewerDoc} />
     </div>
   );
 }

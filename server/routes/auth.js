@@ -6,18 +6,25 @@ import {
   sessionCookieOptions,
   verifyCredentials,
 } from "../lib/auth.js";
+import {
+  checkLoginRateLimit,
+  recordLoginFailure,
+  recordLoginSuccess,
+} from "../lib/rateLimit.js";
 import { env } from "../lib/env.js";
 
 export const authRouter = Router();
 
-authRouter.post("/login", (req, res) => {
+authRouter.post("/login", checkLoginRateLimit, async (req, res) => {
   const { email, password, totp } = req.body || {};
   const result = verifyCredentials(email, password, totp);
   if (!result.ok) {
+    await recordLoginFailure(req);
     return res
       .status(401)
       .json({ error: result.error, totpRequired: !!result.totpRequired });
   }
+  await recordLoginSuccess(req);
   res.cookie(SESSION_COOKIE, createSessionToken(), sessionCookieOptions());
   res.json({ ok: true });
 });

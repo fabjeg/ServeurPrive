@@ -34,6 +34,7 @@ export const api = {
   updateDocument: (id, patch) =>
     request(`/api/documents/${id}`, { method: "PATCH", body: patch }),
   deleteDocument: (id) => request(`/api/documents/${id}`, { method: "DELETE" }),
+  analyzeDocument: (id) => request(`/api/documents/${id}/analyze`, { method: "POST", body: {} }),
 
   // Dossiers (référentiels par modèle de frigo) et interventions.
   listFolders: () => request("/api/folders"),

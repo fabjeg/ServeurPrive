@@ -5,6 +5,7 @@ import { Readable } from "node:stream";
 import { requireAuth } from "../lib/auth.js";
 import {
   deleteDocument,
+  extractDocumentText,
   fetchBlobResponse,
   getDocument,
   listCategories,
@@ -12,7 +13,9 @@ import {
   registerDocument,
   updateDocument,
 } from "../services/documents.js";
-import { resolveFolderId } from "../services/folders.js";
+import { getOrCreateFolder, listFolders, resolveFolderId } from "../services/folders.js";
+import { analyzeDocumentText } from "../services/analyze.js";
+import { env } from "../lib/env.js";
 
 export const documentsRouter = Router();
 documentsRouter.use(requireAuth);
@@ -65,6 +68,53 @@ documentsRouter.post("/", async (req, res, next) => {
       blobUrl,
     });
     res.status(201).json({ document: doc.toClient() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Extraction automatique des informations clés (modèle, type, version, tags)
+// puis classement : dossier créé/retrouvé d'après le modèle détecté, catégorie
+// et tags complétés. Les choix explicites de l'utilisateur ne sont jamais
+// écrasés (dossier déjà choisi, catégorie autre que « divers »).
+documentsRouter.post("/:id/analyze", async (req, res, next) => {
+  try {
+    if (!env.anthropicApiKey) {
+      return res.json({ analyzed: false, reason: "Analyse non configurée (clé API manquante)." });
+    }
+    const doc = await getDocument(req.ownerId, req.params.id);
+    if (!doc) return res.status(404).json({ error: "Document introuvable." });
+
+    const extracted = await extractDocumentText(doc);
+    if (!extracted.ok) return res.json({ analyzed: false, reason: extracted.reason });
+
+    const [{ folders }, categories] = await Promise.all([
+      listFolders(req.ownerId),
+      listCategories(req.ownerId),
+    ]);
+    const detected = await analyzeDocumentText({
+      filename: doc.filename,
+      text: extracted.text,
+      existingFolders: folders.map((f) => f.name),
+      existingCategories: categories.map((c) => c._id),
+    });
+    if (!detected) return res.json({ analyzed: false, reason: "Analyse impossible." });
+
+    if (detected.model && !doc.folderId) {
+      const folder = await getOrCreateFolder(req.ownerId, detected.model);
+      doc.folderId = folder._id;
+    }
+    if (detected.category && (!doc.category || doc.category === "divers")) {
+      doc.category = detected.category.toLowerCase();
+    }
+    const newTags = [...(detected.tags || []), ...(detected.version ? [detected.version] : [])]
+      .map((t) => String(t).trim().toLowerCase())
+      .filter(Boolean);
+    doc.tags = [...new Set([...doc.tags, ...newTags])].slice(0, 12);
+    if (detected.description && !doc.description) doc.description = detected.description;
+    await doc.save();
+
+    res.json({ analyzed: true, detected, document: doc.toClient() });
   } catch (err) {
     next(err);
   }

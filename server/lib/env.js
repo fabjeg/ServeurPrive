@@ -31,6 +31,10 @@ export const env = {
   get mcpAccessToken() {
     return required("MCP_ACCESS_TOKEN");
   },
+  get anthropicApiKey() {
+    // Optionnel : le chatbot est désactivé (erreur explicite) si absent.
+    return process.env.ANTHROPIC_API_KEY || null;
+  },
   get isProduction() {
     return process.env.NODE_ENV === "production" || !!process.env.VERCEL;
   },
