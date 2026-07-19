@@ -2,15 +2,29 @@ import { api } from "../api.js";
 import { IconChevron, IconFolder, IconSnow } from "./Icons.jsx";
 
 export function FolderCard({ folder, onOpen }) {
+  if (folder.hasLogo) {
+    // Marque avec logo : le logo remplace le nom, en grand et centré —
+    // même traitement que l'en-tête de la page de la marque.
+    return (
+      <li>
+        <button className="folder-card folder-card--logo" onClick={() => onOpen(folder)}>
+          <span className="folder-card__badge folder-card__badge--corner">
+            {folder.documentCount} doc{folder.documentCount > 1 ? "s" : ""}
+          </span>
+          <img
+            className="folder-card__logo-big"
+            src={api.folderLogoUrl(folder.space, folder.id)}
+            alt={folder.name}
+          />
+        </button>
+      </li>
+    );
+  }
   return (
     <li>
       <button className="folder-card" onClick={() => onOpen(folder)}>
-        <span className={`folder-card__icon ${folder.hasLogo ? "folder-card__icon--logo" : ""}`}>
-          {folder.hasLogo ? (
-            <img src={api.folderLogoUrl(folder.space, folder.id)} alt="" />
-          ) : (
-            <IconSnow />
-          )}
+        <span className="folder-card__icon">
+          <IconSnow />
         </span>
         <span className="folder-card__body">
           <span className="folder-card__title-row">
