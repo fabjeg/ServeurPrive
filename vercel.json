@@ -5,7 +5,9 @@
   "framework": null,
   "functions": {
     "api/index.js": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "memory": 2048,
+      "includeFiles": "node_modules/tesseract.js-core/**"
     }
   },
   "rewrites": [
