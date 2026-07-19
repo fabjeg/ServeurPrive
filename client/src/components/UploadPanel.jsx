@@ -20,12 +20,6 @@ async function dataUrlToBlob(dataUrl) {
   return (await fetch(dataUrl)).blob();
 }
 
-const POLL_INTERVAL_MS = 2000;
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 const PERSO_CATEGORIES = [
   { value: "fiche de paie", label: "Fiche de paie" },
   { value: "contrat", label: "Contrat" },
@@ -118,20 +112,6 @@ export function UploadPanel({
     return { blobPath: uploaded.pathname, blobUrl: uploaded.url, size: blob.size };
   };
 
-  // Attend que le traitement OCR en arrière-plan (processScanDocument) ait
-  // fini — le document est déjà créé (ocrStatus "pending"), on ne fait que
-  // repoller son statut jusqu'à "done"/"failed".
-  const waitForOcr = async (doc) => {
-    let current = doc;
-    while (current.ocrStatus === "pending") {
-      setProgress({ label: "Extraction du texte…", percent: 100 });
-      await sleep(POLL_INTERVAL_MS);
-      const { document } = await api.getDocument(doc.space, doc.id);
-      current = document;
-    }
-    return current;
-  };
-
   const submit = async (e) => {
     e.preventDefault();
     if (!hasContent || progress) return;
@@ -154,31 +134,34 @@ export function UploadPanel({
         );
       }
 
-      let scanDoc = null;
+      let scannedOne = false;
       if (scanPages.length) {
         const pages = [];
         for (let i = 0; i < scanPages.length; i++) {
           const blob = await dataUrlToBlob(scanPages[i].dataUrl);
           pages.push(await uploadScanPage(blob, `page-${i + 1}-${stamp()}.jpg`, i, scanPages.length));
         }
-        setProgress({ label: "Traitement du scan…", percent: 100 });
-        const { document } = await api.createScanDocument(space, {
+        setProgress({ label: "Création du document…", percent: 100 });
+        await api.createScanDocument(space, {
           filename: `scan-${stamp()}.pdf`,
           category: cat,
           tags: tagList,
           folderId: folderId || undefined,
           pages,
         });
-        scanDoc = document;
+        // Le traitement OCR (souvent long sur un vrai téléphone, mobile
+        // compris) tourne en arrière-plan côté serveur (ocrStatus "pending"
+        // -> "done"/"failed", voir processScanDocument) : on ne bloque jamais
+        // l'utilisateur dessus. DocumentCard affiche déjà un badge "Extraction
+        // en cours…" tant que ce n'est pas fini — pas besoin de repoller ici,
+        // ça ne ferait qu'immobiliser l'écran d'upload sans raison.
+        scannedOne = true;
       }
 
       // Extraction automatique des informations clés : modèle → dossier,
       // type → catégorie, version → tag. Un échec d'analyse n'annule jamais
       // l'upload — le document est déjà enregistré. Perso n'a pas de
-      // dossiers : pas d'analyse à y faire. Les PDF classiques passent par
-      // l'analyse synchrone existante ; le scan a déjà été classé en arrière-
-      // plan (texte OCR réutilisé directement, voir processScanDocument) —
-      // on attend juste la fin du traitement pour lire le résultat.
+      // dossiers : pas d'analyse à y faire.
       const pdfs = isPerso ? [] : uploaded.filter((d) => d.mimetype === "application/pdf");
       const results = [];
       for (const doc of pdfs) {
@@ -194,23 +177,11 @@ export function UploadPanel({
           results.push({ filename: doc.filename, detected: null, reason: "Analyse impossible." });
         }
       }
-      if (scanDoc) {
-        const finalDoc = await waitForOcr(scanDoc);
-        results.push(
-          finalDoc.ocrStatus === "done"
-            ? {
-                filename: finalDoc.filename,
-                detected: {
-                  model: null,
-                  category: finalDoc.category,
-                  version: null,
-                  tags: finalDoc.tags,
-                },
-              }
-            : { filename: finalDoc.filename, detected: null, reason: "Extraction du texte impossible." }
-        );
-      }
 
+      if (scannedOne && !results.length) {
+        onUploaded();
+        return;
+      }
       if (results.length) {
         setProgress(null);
         setAnalysis(results);
