@@ -11,10 +11,13 @@
   background: var(--overlay);
   backdrop-filter: blur(2px);
 
-  &--viewer {
-    // Pas de centrage grille ici : la hauteur 100% du .viewer doit se résoudre
-    // contre l'overlay (hauteur définie), pas contre une rangée auto dimensionnée
-    // par le contenu — sinon le viewer déborde et plus rien ne défile.
+  &--viewer,
+  &--scan {
+    // Pas de centrage grille ici : la hauteur 100% du contenu (.viewer,
+    // .scan-review) doit se résoudre contre l'overlay (hauteur définie), pas
+    // contre une rangée auto dimensionnée par le contenu — sinon une image
+    // volumineuse déborde et pousse les boutons d'action hors écran, sans
+    // aucun moyen de les atteindre.
     display: block;
     padding: 0;
     background: var(--surface-inverse);

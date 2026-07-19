@@ -28,17 +28,26 @@ function getWorker() {
 // de la page et la liste des mots avec leur position en pixels de l'image
 // d'origine (bbox Tesseract), telle quelle — sans conversion : scanPdf.js
 // dimensionne la page PDF directement sur ces pixels.
+//
+// `output: { blocks: true }` est indispensable : par défaut recognize() ne
+// renvoie que le texte brut (voir tesseract.js/src/createWorker.js, output
+// par défaut `{ text: true }`) — sans ça `data.words` n'existe même pas.
+// Les mots ne sont pas non plus à plat : il faut descendre l'arbre
+// blocks -> paragraphs -> lines -> words (voir tesseract.js/src/index.d.ts).
 export async function ocrImage(buffer) {
   const worker = await getWorker();
-  const { data } = await worker.recognize(buffer);
-  const words = (data.words || [])
-    .filter((w) => w.confidence >= MIN_CONFIDENCE && w.text.trim())
-    .map((w) => ({
-      text: w.text,
-      x0: w.bbox.x0,
-      y0: w.bbox.y0,
-      x1: w.bbox.x1,
-      y1: w.bbox.y1,
-    }));
+  const { data } = await worker.recognize(buffer, {}, { text: true, blocks: true });
+  const words = [];
+  for (const block of data.blocks || []) {
+    for (const paragraph of block.paragraphs || []) {
+      for (const line of paragraph.lines || []) {
+        for (const w of line.words || []) {
+          if (w.confidence >= MIN_CONFIDENCE && w.text.trim()) {
+            words.push({ text: w.text, x0: w.bbox.x0, y0: w.bbox.y0, x1: w.bbox.x1, y1: w.bbox.y1 });
+          }
+        }
+      }
+    }
+  }
   return { text: (data.text || "").trim(), words };
 }
