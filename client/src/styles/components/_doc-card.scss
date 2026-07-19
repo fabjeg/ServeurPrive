@@ -86,6 +86,13 @@
       margin-top: 0.15rem;
       color: var(--accent);
     }
+
+    &--pending svg {
+      color: var(--text-faint);
+      @media (prefers-reduced-motion: no-preference) {
+        animation: doc-card-pulse 1.4s ease-in-out infinite;
+      }
+    }
   }
 
   &__stamp {
@@ -125,5 +132,15 @@
       background: color-mix(in srgb, var(--danger) 8%, transparent);
       color: var(--danger);
     }
+  }
+}
+
+@keyframes doc-card-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
   }
 }

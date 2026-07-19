@@ -4,8 +4,12 @@ import { waitUntil } from "@vercel/functions";
 import { connectDb } from "../lib/db.js";
 import { env } from "../lib/env.js";
 import { Document } from "../models/Document.js";
-import { extractContent } from "./extractContent.js";
+import { extractContent, MAX_TEXT_CHARS } from "./extractContent.js";
 import { generateSummary } from "./summarize.js";
+import { analyzeDocumentText } from "./analyze.js";
+import { getOrCreateFolder, listFolders } from "./folders.js";
+import { ocrImage } from "./ocr.js";
+import { buildSearchablePdf } from "./scanPdf.js";
 
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -109,6 +113,138 @@ export async function processNewDocument(doc) {
   }
 
   await generateSummary(doc, extracted);
+}
+
+// Classement automatique à partir d'un texte déjà extrait (pdf-parse ou OCR
+// — analyzeDocumentText ne fait aucune distinction, voir services/analyze.js) :
+// détecte modèle/catégorie/version/tags via Gemini puis les applique SANS
+// jamais écraser un choix déjà fait par l'utilisateur (dossier déjà choisi,
+// catégorie différente de "divers"). Partagé par la route POST /:id/analyze
+// (PDF uploadés directement, texte déjà présent) et processScanDocument
+// ci-dessous (photos scannées, texte OCR) — une seule implémentation.
+export async function applyDetectedMetadata(ownerId, space, doc, text) {
+  const [{ folders }, categories] = await Promise.all([
+    listFolders(ownerId, space),
+    listCategories(ownerId, space),
+  ]);
+  const detected = await analyzeDocumentText({
+    filename: doc.filename,
+    text,
+    existingFolders: folders.map((f) => f.name),
+    existingCategories: categories.map((c) => c._id),
+  });
+  if (!detected) return null;
+
+  if (detected.model && !doc.folderId) {
+    const folder = await getOrCreateFolder(ownerId, space, detected.model);
+    doc.folderId = folder._id;
+  }
+  if (detected.category && (!doc.category || doc.category === "divers")) {
+    doc.category = detected.category.toLowerCase();
+  }
+  const newTags = [...(detected.tags || []), ...(detected.version ? [detected.version] : [])]
+    .map((t) => String(t).trim().toLowerCase())
+    .filter(Boolean);
+  doc.tags = [...new Set([...doc.tags, ...newTags])].slice(0, 12);
+  if (detected.description && !doc.description) doc.description = detected.description;
+  return detected;
+}
+
+// Crée le document d'un scan multi-photos : les pages sont déjà uploadées en
+// Blob (images individuelles, cf. UploadPanel.jsx) au moment de l'appel — ce
+// qui manque encore est l'assemblage en PDF searchable, fait en arrière-plan
+// (processScanDocument) pour ne jamais bloquer la réponse HTTP dessus (OCR +
+// génération PDF peuvent prendre plusieurs secondes par page). Le blob de la
+// première page sert de placeholder le temps du traitement : le document est
+// consultable (en image) dès sa création.
+export async function createScanDocument(
+  ownerId,
+  { space, filename, category, tags, folderId, pages }
+) {
+  requireSpace(space);
+  await connectDb();
+  const first = pages[0];
+  const doc = await Document.create({
+    ownerId,
+    space,
+    filename,
+    mimetype: "image/jpeg",
+    category: category || "divers",
+    tags: Array.isArray(tags) ? tags.filter(Boolean) : [],
+    size: pages.reduce((sum, p) => sum + (p.size || 0), 0),
+    source: "web",
+    folderId: folderId || null,
+    blobPath: first.blobPath,
+    blobUrl: first.blobUrl,
+    ocrStatus: "pending",
+  });
+
+  const processPromise = processScanDocument(doc, space, pages).catch((err) =>
+    console.error("Traitement OCR du scan — erreur inattendue :", err)
+  );
+  waitUntil(processPromise);
+  return doc;
+}
+
+// Traitement en arrière-plan d'un scan : OCR de chaque page → assemblage en
+// un seul PDF searchable → remplacement du blob image par ce PDF → texte OCR
+// réutilisé tel quel comme entrée d'applyDetectedMetadata (aucun second appel
+// à extractDocumentText/pdf-parse sur le PDF fraîchement généré — le texte
+// est déjà en main). Best-effort comme processNewDocument/generateSummary :
+// ocrStatus passe à "failed" plutôt que de relancer une exception.
+export async function processScanDocument(doc, space, pages) {
+  try {
+    const ocrPages = [];
+    for (const page of pages) {
+      const res = await fetch(page.blobUrl, {
+        headers: { authorization: `Bearer ${env.blobToken}` },
+      });
+      if (!res.ok) throw new Error(`Page inaccessible dans le stockage (${page.blobPath}).`);
+      const buffer = Buffer.from(await res.arrayBuffer());
+      const { text, words } = await ocrImage(buffer);
+      ocrPages.push({ buffer, words, text });
+    }
+
+    const pdfBuffer = await buildSearchablePdf(ocrPages);
+    const combinedText = ocrPages.map((p) => p.text).join("\n\n").trim();
+    const truncatedText = combinedText.length > MAX_TEXT_CHARS
+      ? combinedText.slice(0, MAX_TEXT_CHARS)
+      : combinedText;
+
+    const blob = await put(`documents/${doc.ownerId}/${doc.filename}`, pdfBuffer, {
+      access: "private",
+      addRandomSuffix: true,
+      contentType: "application/pdf",
+      token: env.blobToken,
+    });
+
+    await connectDb();
+    await Promise.all(pages.map((p) => del(p.blobUrl, { token: env.blobToken }).catch(() => {})));
+
+    doc.blobPath = blob.pathname;
+    doc.blobUrl = blob.url;
+    doc.mimetype = "application/pdf";
+    doc.size = pdfBuffer.length;
+    doc.extractedText = truncatedText;
+    doc.ocrStatus = "done";
+
+    if (combinedText) {
+      await applyDetectedMetadata(doc.ownerId, space, doc, combinedText).catch((err) =>
+        console.error("Classement automatique du scan échoué :", err?.message || err)
+      );
+    }
+    await doc.save();
+
+    await generateSummary(doc, {
+      kind: combinedText ? "pdf" : "pdf_no_text",
+      text: combinedText,
+      pages: ocrPages.length,
+    });
+  } catch (err) {
+    console.error(`Traitement OCR échoué pour le document ${doc._id} :`, err?.message || err);
+    await connectDb();
+    await Document.findByIdAndUpdate(doc._id, { ocrStatus: "failed" }).catch(() => {});
+  }
 }
 
 // Dépôt côté serveur (tool MCP add_document) : mêmes règles que l'upload web —

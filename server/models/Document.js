@@ -31,6 +31,13 @@ const documentSchema = new mongoose.Schema(
       enum: ["pending", "done", "failed", "skipped"],
       default: "pending",
     },
+    // Statut du traitement OCR asynchrone (photos scannées uniquement — voir
+    // services/documents.js:createScanDocument/processScanDocument). Absent
+    // pour tout document qui n'est pas issu du flux scan (upload direct).
+    ocrStatus: {
+      type: String,
+      enum: ["pending", "done", "failed"],
+    },
     // Texte extrait à l'upload (PDF/texte) — sert au résumé Gemini ET à
     // l'index full-text ci-dessous, une seule extraction (voir
     // server/services/documents.js:processNewDocument). Jamais renvoyé au
@@ -68,6 +75,7 @@ documentSchema.methods.toClient = function toClient() {
     description: this.description,
     summary: this.summary,
     summaryStatus: this.summaryStatus,
+    ocrStatus: this.ocrStatus || null,
     uploadedAt: this.uploadedAt,
   };
 };

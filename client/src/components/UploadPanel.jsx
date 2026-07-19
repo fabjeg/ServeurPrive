@@ -13,22 +13,17 @@ function stamp() {
   return new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
 }
 
-// Assemble les pages scannées en un seul PDF A4 (chargé à la demande).
-async function buildScanPdf(pages) {
-  const { jsPDF } = await import("jspdf");
-  const pdf = new jsPDF({ unit: "mm", format: "a4", compress: true });
-  const pageW = 210;
-  const pageH = 297;
-  const margin = 6;
-  pages.forEach((page, i) => {
-    if (i > 0) pdf.addPage();
-    const ratio = Math.min((pageW - 2 * margin) / page.width, (pageH - 2 * margin) / page.height);
-    const w = page.width * ratio;
-    const h = page.height * ratio;
-    pdf.addImage(page.dataUrl, "JPEG", (pageW - w) / 2, (pageH - h) / 2, w, h);
-  });
-  const blob = pdf.output("blob");
-  return new File([blob], `scan-${stamp()}.pdf`, { type: "application/pdf" });
+// dataUrl (canvas.toDataURL) -> Blob, pour uploader chaque page de scan comme
+// une image individuelle (le PDF searchable final est assemblé côté serveur
+// par processScanDocument à partir de ces pages, voir server/services/documents.js).
+async function dataUrlToBlob(dataUrl) {
+  return (await fetch(dataUrl)).blob();
+}
+
+const POLL_INTERVAL_MS = 2000;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 const PERSO_CATEGORIES = [
@@ -105,6 +100,38 @@ export function UploadPanel({
     return document;
   };
 
+  // Upload d'une page de scan individuelle : blob temporaire, jamais
+  // enregistré comme document à part entière (scanPage: true, voir
+  // server/routes/upload.js:onUploadCompleted) — createScanDocument assemble
+  // toutes les pages en un seul PDF searchable une fois uploadées.
+  const uploadScanPage = async (blob, name, index, total) => {
+    const uploaded = await upload(`${OWNER_PREFIX}/${name}`, blob, {
+      access: "private",
+      handleUploadUrl: "/api/upload",
+      clientPayload: JSON.stringify({ scanPage: true, space }),
+      onUploadProgress: ({ percentage }) =>
+        setProgress({
+          label: `Envoi de la page ${index + 1}/${total}…`,
+          percent: Math.round(percentage),
+        }),
+    });
+    return { blobPath: uploaded.pathname, blobUrl: uploaded.url, size: blob.size };
+  };
+
+  // Attend que le traitement OCR en arrière-plan (processScanDocument) ait
+  // fini — le document est déjà créé (ocrStatus "pending"), on ne fait que
+  // repoller son statut jusqu'à "done"/"failed".
+  const waitForOcr = async (doc) => {
+    let current = doc;
+    while (current.ocrStatus === "pending") {
+      setProgress({ label: "Extraction du texte…", percent: 100 });
+      await sleep(POLL_INTERVAL_MS);
+      const { document } = await api.getDocument(doc.space, doc.id);
+      current = document;
+    }
+    return current;
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     if (!hasContent || progress) return;
@@ -113,13 +140,8 @@ export function UploadPanel({
     const cat = category.trim().toLowerCase() || "divers";
 
     try {
-      const queue = [...files];
-      if (scanPages.length) {
-        setProgress({ label: "Assemblage du scan…", percent: 0 });
-        queue.push(await buildScanPdf(scanPages));
-      }
       const uploaded = [];
-      for (const file of queue) {
+      for (const file of files) {
         uploaded.push(
           await uploadOne(file, {
             filename: file.name,
@@ -132,26 +154,64 @@ export function UploadPanel({
         );
       }
 
-      // Extraction automatique des informations clés (PDF uniquement) :
-      // modèle → dossier, type → catégorie, version → tag. Un échec d'analyse
-      // n'annule jamais l'upload — le document est déjà enregistré. Perso n'a
-      // pas de dossiers : pas d'analyse à y faire.
-      const pdfs = isPerso ? [] : uploaded.filter((d) => d.mimetype === "application/pdf");
-      if (pdfs.length) {
-        const results = [];
-        for (const doc of pdfs) {
-          setProgress({ label: `Analyse de ${doc.filename}…`, percent: 100 });
-          try {
-            const r = await api.analyzeDocument(doc.space, doc.id);
-            results.push({
-              filename: doc.filename,
-              detected: r.analyzed ? r.detected : null,
-              reason: r.analyzed ? null : r.reason,
-            });
-          } catch {
-            results.push({ filename: doc.filename, detected: null, reason: "Analyse impossible." });
-          }
+      let scanDoc = null;
+      if (scanPages.length) {
+        const pages = [];
+        for (let i = 0; i < scanPages.length; i++) {
+          const blob = await dataUrlToBlob(scanPages[i].dataUrl);
+          pages.push(await uploadScanPage(blob, `page-${i + 1}-${stamp()}.jpg`, i, scanPages.length));
         }
+        setProgress({ label: "Traitement du scan…", percent: 100 });
+        const { document } = await api.createScanDocument(space, {
+          filename: `scan-${stamp()}.pdf`,
+          category: cat,
+          tags: tagList,
+          folderId: folderId || undefined,
+          pages,
+        });
+        scanDoc = document;
+      }
+
+      // Extraction automatique des informations clés : modèle → dossier,
+      // type → catégorie, version → tag. Un échec d'analyse n'annule jamais
+      // l'upload — le document est déjà enregistré. Perso n'a pas de
+      // dossiers : pas d'analyse à y faire. Les PDF classiques passent par
+      // l'analyse synchrone existante ; le scan a déjà été classé en arrière-
+      // plan (texte OCR réutilisé directement, voir processScanDocument) —
+      // on attend juste la fin du traitement pour lire le résultat.
+      const pdfs = isPerso ? [] : uploaded.filter((d) => d.mimetype === "application/pdf");
+      const results = [];
+      for (const doc of pdfs) {
+        setProgress({ label: `Analyse de ${doc.filename}…`, percent: 100 });
+        try {
+          const r = await api.analyzeDocument(doc.space, doc.id);
+          results.push({
+            filename: doc.filename,
+            detected: r.analyzed ? r.detected : null,
+            reason: r.analyzed ? null : r.reason,
+          });
+        } catch {
+          results.push({ filename: doc.filename, detected: null, reason: "Analyse impossible." });
+        }
+      }
+      if (scanDoc) {
+        const finalDoc = await waitForOcr(scanDoc);
+        results.push(
+          finalDoc.ocrStatus === "done"
+            ? {
+                filename: finalDoc.filename,
+                detected: {
+                  model: null,
+                  category: finalDoc.category,
+                  version: null,
+                  tags: finalDoc.tags,
+                },
+              }
+            : { filename: finalDoc.filename, detected: null, reason: "Extraction du texte impossible." }
+        );
+      }
+
+      if (results.length) {
         setProgress(null);
         setAnalysis(results);
       } else {

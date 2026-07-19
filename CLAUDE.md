@@ -24,6 +24,22 @@ authentification.** Jamais de secret dans ce fichier ni dans le repo.
   fonction, le reste vers le build Vite (fallback SPA).
 - **Stockage** : Vercel Blob **privé** (@vercel/blob v2) pour les fichiers,
   MongoDB Atlas pour les métadonnées seulement (`server/models/Document.js`).
+- **Scan photo → PDF searchable** : une photo prise via l'appareil
+  (`ScanReview.jsx`) n'est plus assemblée en PDF-image côté client. Chaque
+  page est uploadée individuellement (`scanPage: true` dans le
+  `clientPayload`, ignoré par `onUploadCompleted` — voir `server/routes/
+  upload.js`), puis `POST /api/documents/scan` crée le document
+  (`ocrStatus: "pending"`, blob de la 1ʳᵉ page en placeholder) et répond
+  immédiatement. En arrière-plan (`processScanDocument`, fire-and-forget via
+  `waitUntil`, `server/services/documents.js`) : OCR Tesseract.js par page
+  (`server/services/ocr.js`, langue française bundlée dans
+  `server/ocr-data/`, jamais de fetch réseau) → assemblage en un seul PDF
+  multi-pages avec `pdf-lib` (`server/services/scanPdf.js`, image visible +
+  texte invisible `opacity: 0` positionné sur les bbox Tesseract) → le texte
+  OCR sert directement d'entrée à `analyzeDocumentText` (pas de second appel
+  d'extraction sur le PDF généré) → `ocrStatus: "done"`. Le client
+  (`UploadPanel.jsx`) poll `GET /api/documents/:id` toutes les 2s tant que
+  `ocrStatus === "pending"`.
 - **Auth** : JWT cookie + TOTP optionnel, utilisateur unique défini par env.
   Supprimer la variable `TOTP_SECRET` sur Vercel désactive la 2FA
   (récupération en cas de perte de l'authenticator).
@@ -96,6 +112,12 @@ Après un déploiement, relancer les tests e2e contre
   localhost : le client confirme chaque upload via `POST /api/documents`
   (upsert par `blobPath` déduplique en prod).
 - `/tmp` sous Windows résout vers `C:\tmp` — utiliser le scratchpad.
+- **`pdf-lib` `embedJpg` et le pool de Buffer Node** : `JpegEmbedder` lit le
+  SOI via `new DataView(imageData.buffer)` sans tenir compte d'un
+  `byteOffset` non nul — un petit `Buffer` alloué via le pool interne de Node
+  (fréquent) plante avec `SOI not found in JPEG` alors que les octets sont
+  corrects. Toujours passer une copie à offset 0 (`new Uint8Array(buffer)`)
+  à `embedJpg`, jamais le Buffer brut — voir `server/services/scanPdf.js`.
 - **Profondeur des dossiers plafonnée à 1** (marque → modèle) : imposée
   uniquement dans `server/services/folders.js` (`assertValidParent`), pas
   dans le schéma Mongoose — toute nouvelle fonction qui crée/modifie un

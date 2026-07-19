@@ -41,6 +41,10 @@ uploadRouter.post("/", async (req, res) => {
         // le client fait aussi une confirmation explicite, l'upsert déduplique.
         const payload = JSON.parse(tokenPayload || "{}");
         const meta = JSON.parse(payload.clientPayload || "{}");
+        // Page individuelle d'un scan multi-photos (UploadPanel) : ce blob est
+        // temporaire, remplacé par le PDF searchable final et supprimé par
+        // processScanDocument — jamais enregistré comme document à part entière.
+        if (meta.scanPage) return;
         const ownerId = payload.ownerId || OWNER_ID;
         // space vient du clientPayload envoyé par UploadPanel — jamais de
         // défaut silencieux : si absent/invalide, registerDocument lève.

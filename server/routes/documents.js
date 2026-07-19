@@ -7,6 +7,8 @@ import { Router } from "express";
 import { Readable } from "node:stream";
 import { requireAuth } from "../lib/auth.js";
 import {
+  applyDetectedMetadata,
+  createScanDocument,
   deleteDocument,
   extractDocumentText,
   fetchBlobResponse,
@@ -17,8 +19,7 @@ import {
   searchDocumentsFullText,
   updateDocument,
 } from "../services/documents.js";
-import { getOrCreateFolder, listFolders, resolveFolderId } from "../services/folders.js";
-import { analyzeDocumentText } from "../services/analyze.js";
+import { resolveFolderId } from "../services/folders.js";
 
 export const documentsRouter = Router();
 documentsRouter.use(requireAuth);
@@ -119,33 +120,44 @@ documentsRouter.post("/:id/analyze", async (req, res, next) => {
     const extracted = await extractDocumentText(doc);
     if (!extracted.ok) return res.json({ analyzed: false, reason: extracted.reason });
 
-    const [{ folders }, categories] = await Promise.all([
-      listFolders(req.ownerId, space),
-      listCategories(req.ownerId, space),
-    ]);
-    const detected = await analyzeDocumentText({
-      filename: doc.filename,
-      text: extracted.text,
-      existingFolders: folders.map((f) => f.name),
-      existingCategories: categories.map((c) => c._id),
-    });
+    const detected = await applyDetectedMetadata(req.ownerId, space, doc, extracted.text);
     if (!detected) return res.json({ analyzed: false, reason: "Analyse impossible." });
-
-    if (detected.model && !doc.folderId) {
-      const folder = await getOrCreateFolder(req.ownerId, space, detected.model);
-      doc.folderId = folder._id;
-    }
-    if (detected.category && (!doc.category || doc.category === "divers")) {
-      doc.category = detected.category.toLowerCase();
-    }
-    const newTags = [...(detected.tags || []), ...(detected.version ? [detected.version] : [])]
-      .map((t) => String(t).trim().toLowerCase())
-      .filter(Boolean);
-    doc.tags = [...new Set([...doc.tags, ...newTags])].slice(0, 12);
-    if (detected.description && !doc.description) doc.description = detected.description;
     await doc.save();
 
     res.json({ analyzed: true, detected, document: doc.toClient() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Crée le document final d'un scan multi-photos : les pages sont déjà
+// uploadées en Blob individuellement (voir UploadPanel.jsx) — cette route ne
+// fait qu'enregistrer le document (placeholder image, ocrStatus "pending") et
+// répond immédiatement ; l'assemblage en PDF searchable (OCR + pdf-lib) tourne
+// en arrière-plan (createScanDocument → processScanDocument, fire-and-forget
+// via waitUntil, même pattern que le traitement post-upload standard).
+documentsRouter.post("/scan", async (req, res, next) => {
+  try {
+    const space = parseSpace(req.body?.space);
+    if (!space) return res.status(400).json(SPACE_ERROR);
+    const { filename, category, tags, folderId, pages } = req.body || {};
+    if (!filename || !Array.isArray(pages) || !pages.length) {
+      return res.status(400).json({ error: "Métadonnées de scan incomplètes." });
+    }
+    for (const p of pages) {
+      if (!p.blobPath || !p.blobUrl || !p.blobPath.startsWith(`documents/${req.ownerId}/`)) {
+        return res.status(400).json({ error: "Chemin de blob non autorisé." });
+      }
+    }
+    const doc = await createScanDocument(req.ownerId, {
+      space,
+      filename,
+      category: category || "divers",
+      tags: Array.isArray(tags) ? tags.filter(Boolean) : [],
+      folderId: await resolveFolderId(req.ownerId, space, folderId),
+      pages,
+    });
+    res.status(201).json({ document: doc.toClient() });
   } catch (err) {
     next(err);
   }

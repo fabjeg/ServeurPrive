@@ -39,11 +39,18 @@ export function DocumentCard({ doc, onOpen, onDelete }) {
         </span>
         <span className="doc-card__text">
           <span className="doc-card__name">{doc.filename}</span>
-          {doc.summary && (
-            <span className="doc-card__summary">
+          {doc.ocrStatus === "pending" ? (
+            <span className="doc-card__summary doc-card__summary--pending">
               <IconSparkle />
-              {doc.summary}
+              Extraction du texte en cours…
             </span>
+          ) : (
+            doc.summary && (
+              <span className="doc-card__summary">
+                <IconSparkle />
+                {doc.summary}
+              </span>
+            )
           )}
           <span className="doc-card__stamp">
             <span className="doc-card__category">{doc.category}</span>

@@ -35,6 +35,7 @@ export const api = {
 
   listDocuments: (space, filters = {}) =>
     request(`/api/documents?${withSpace(space, filters)}`),
+  getDocument: (space, id) => request(`/api/documents/${id}?${withSpace(space)}`),
   searchDocuments: (space, q) => request(`/api/documents/search?${withSpace(space, { q })}`),
   listCategories: (space) => request(`/api/documents/categories?${withSpace(space)}`),
   registerDocument: (space, meta) =>
@@ -45,6 +46,8 @@ export const api = {
     request(`/api/documents/${id}?${withSpace(space)}`, { method: "DELETE" }),
   analyzeDocument: (space, id) =>
     request(`/api/documents/${id}/analyze`, { method: "POST", body: { space } }),
+  createScanDocument: (space, body) =>
+    request("/api/documents/scan", { method: "POST", body: { ...body, space } }),
 
   // Dossiers (marque -> modèle, pro uniquement côté UI). Sans parentId,
   // liste les marques (dossiers de premier niveau) uniquement.
