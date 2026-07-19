@@ -3,12 +3,17 @@
 // même garantie de cloisonnement que routes/documents.js. Les dossiers sont
 // un concept pro-only côté UI, mais la route reste générique.
 import { Router } from "express";
+import { Readable } from "node:stream";
 import { requireAuth } from "../lib/auth.js";
+import { env } from "../lib/env.js";
 import {
   createFolder,
   deleteFolder,
+  getFolder,
   getFolderDetail,
   listFolders,
+  removeFolderLogo,
+  setFolderLogo,
   updateFolder,
 } from "../services/folders.js";
 
@@ -95,6 +100,67 @@ foldersRouter.patch("/:id", async (req, res, next) => {
     if (err.message?.includes("parent")) {
       return res.status(400).json({ error: err.message });
     }
+    next(err);
+  }
+});
+
+const LOGO_MAX_BYTES = 2 * 1024 * 1024;
+const LOGO_ALLOWED_MIME = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"];
+
+foldersRouter.get("/:id/logo", async (req, res, next) => {
+  try {
+    const space = parseSpace(req.query.space);
+    if (!space) return res.status(400).json(SPACE_ERROR);
+    const folder = await getFolder(req.ownerId, req.params.id, space);
+    if (!folder?.logo?.blobUrl) return res.status(404).json({ error: "Pas de logo." });
+
+    const blobRes = await fetch(folder.logo.blobUrl, {
+      headers: { authorization: `Bearer ${env.blobToken}` },
+    });
+    if (!blobRes.ok || !blobRes.body) return res.status(502).json({ error: "Blob inaccessible." });
+
+    res.setHeader("Content-Type", folder.logo.mimetype || "application/octet-stream");
+    res.setHeader("Cache-Control", "private, no-store");
+    Readable.fromWeb(blobRes.body).pipe(res);
+  } catch (err) {
+    next(err);
+  }
+});
+
+foldersRouter.post("/:id/logo", async (req, res, next) => {
+  try {
+    const space = parseSpace(req.body?.space);
+    if (!space) return res.status(400).json(SPACE_ERROR);
+    const { data, mimetype } = req.body || {};
+    if (!data || !mimetype) {
+      return res.status(400).json({ error: "data (base64) et mimetype requis." });
+    }
+    if (!LOGO_ALLOWED_MIME.includes(mimetype)) {
+      return res.status(400).json({ error: "Format non autorisé (png, jpeg, webp ou svg)." });
+    }
+    const buffer = Buffer.from(data, "base64");
+    if (buffer.length > LOGO_MAX_BYTES) {
+      return res.status(413).json({ error: "Logo trop volumineux (2 Mo max)." });
+    }
+    const folder = await setFolderLogo(req.ownerId, req.params.id, space, {
+      buffer: new Uint8Array(buffer),
+      mimetype,
+    });
+    if (!folder) return res.status(404).json({ error: "Dossier introuvable." });
+    res.json({ folder: folder.toClient() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+foldersRouter.delete("/:id/logo", async (req, res, next) => {
+  try {
+    const space = parseSpace(req.query.space);
+    if (!space) return res.status(400).json(SPACE_ERROR);
+    const folder = await removeFolderLogo(req.ownerId, req.params.id, space);
+    if (!folder) return res.status(404).json({ error: "Dossier introuvable." });
+    res.json({ folder: folder.toClient() });
+  } catch (err) {
     next(err);
   }
 });

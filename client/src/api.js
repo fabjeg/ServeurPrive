@@ -60,6 +60,11 @@ export const api = {
     request(`/api/folders/${id}`, { method: "PATCH", body: { ...body, space } }),
   deleteFolder: (space, id) =>
     request(`/api/folders/${id}?${withSpace(space)}`, { method: "DELETE" }),
+  uploadFolderLogo: (space, id, { data, mimetype }) =>
+    request(`/api/folders/${id}/logo`, { method: "POST", body: { data, mimetype, space } }),
+  deleteFolderLogo: (space, id) =>
+    request(`/api/folders/${id}/logo?${withSpace(space)}`, { method: "DELETE" }),
+  folderLogoUrl: (space, id) => `/api/folders/${id}/logo?${withSpace(space)}`,
 
   // URLs du proxy authentifié — jamais d'URL Blob directe.
   fileUrl: (space, id) => `/api/documents/${id}/file?${withSpace(space)}`,

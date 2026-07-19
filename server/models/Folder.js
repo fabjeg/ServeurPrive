@@ -30,6 +30,15 @@ const folderSchema = new mongoose.Schema(
       pressureBp: { type: String, default: "", trim: true, maxlength: 40 },
       faultCodes: { type: [String], default: [] },
     },
+    // Logo — pertinent seulement pour une marque (parentId null), affiché à
+    // la place de l'icône générique dans FolderGrid. Jamais d'URL Blob
+    // exposée au client (même règle que les documents) : servi via le proxy
+    // authentifié GET /api/folders/:id/logo.
+    logo: {
+      blobPath: { type: String, default: null },
+      blobUrl: { type: String, default: null },
+      mimetype: { type: String, default: null },
+    },
     ownerId: { type: String, required: true, index: true },
     createdAt: { type: Date, default: Date.now },
   },
@@ -55,6 +64,7 @@ folderSchema.methods.toClient = function toClient() {
       pressureBp: this.specs?.pressureBp || "",
       faultCodes: this.specs?.faultCodes || [],
     },
+    hasLogo: Boolean(this.logo?.blobPath),
     createdAt: this.createdAt,
   };
 };

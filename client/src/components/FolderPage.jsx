@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api.js";
 import { DocumentGrid } from "./DocumentGrid.jsx";
 import { FolderCard } from "./FolderGrid.jsx";
@@ -108,6 +108,8 @@ export function FolderPage({
   const [creatingChild, setCreatingChild] = useState(false);
   const [descOpen, setDescOpen] = useState(false);
   const [openCategories, setOpenCategories] = useState(() => new Set());
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = useRef(null);
 
   useBackClose(onBack);
 
@@ -119,6 +121,37 @@ export function FolderPage({
   }, [space, folderId]);
 
   useEffect(load, [load, version]);
+
+  const handleLogoFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadingLogo(true);
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error("Lecture du fichier impossible."));
+        reader.readAsDataURL(file);
+      });
+      await api.uploadFolderLogo(space, folderId, {
+        data: dataUrl.split(",")[1],
+        mimetype: file.type,
+      });
+      load();
+      onChanged();
+    } catch (err) {
+      window.alert(err.message || "Envoi du logo impossible.");
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const handleLogoRemove = async () => {
+    await api.deleteFolderLogo(space, folderId);
+    load();
+    onChanged();
+  };
 
   const handleDeleteFolder = async () => {
     const { folder, childFolders, stats } = detail;
@@ -159,6 +192,13 @@ export function FolderPage({
           ←
         </button>
         <div className="folder-page__title-row">
+          {isBrand && folder.hasLogo && (
+            <img
+              className="folder-page__logo"
+              src={api.folderLogoUrl(space, folder.id)}
+              alt=""
+            />
+          )}
           <h1 className="folder-page__title">{folder.name}</h1>
           <span className="folder-page__badge">
             {stats.documentCount} doc{stats.documentCount > 1 ? "s" : ""} lié
@@ -187,6 +227,29 @@ export function FolderPage({
             <button className="btn" onClick={() => setCreatingChild(true)}>
               + Nouveau modèle
             </button>
+          )}
+          {isBrand && (
+            <>
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                hidden
+                onChange={handleLogoFile}
+              />
+              <button
+                className="btn"
+                onClick={() => logoInputRef.current?.click()}
+                disabled={uploadingLogo}
+              >
+                {uploadingLogo ? "Envoi…" : folder.hasLogo ? "Changer le logo" : "+ Logo"}
+              </button>
+              {folder.hasLogo && (
+                <button className="btn" onClick={handleLogoRemove}>
+                  Retirer le logo
+                </button>
+              )}
+            </>
           )}
           <button className="btn" onClick={() => setEditingFolder(true)}>
             Modifier

@@ -1,3 +1,4 @@
+import { api } from "../api.js";
 import { IconChevron, IconFolder, IconSnow } from "./Icons.jsx";
 
 export function FolderCard({ folder, onOpen }) {
@@ -5,7 +6,11 @@ export function FolderCard({ folder, onOpen }) {
     <li>
       <button className="folder-card" onClick={() => onOpen(folder)}>
         <span className="folder-card__icon">
-          <IconSnow />
+          {folder.hasLogo ? (
+            <img src={api.folderLogoUrl(folder.space, folder.id)} alt="" />
+          ) : (
+            <IconSnow />
+          )}
         </span>
         <span className="folder-card__body">
           <span className="folder-card__title-row">

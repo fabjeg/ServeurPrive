@@ -36,6 +36,16 @@
     flex-wrap: wrap;
   }
 
+  &__logo {
+    width: 2.4rem;
+    height: 2.4rem;
+    padding: 0.3rem;
+    border-radius: 8px;
+    background: #fff;
+    object-fit: contain;
+    box-shadow: var(--shadow-1);
+  }
+
   &__title {
     font-family: $font-display;
     font-size: var(--fs-xl);

@@ -6,7 +6,9 @@
 // Hiérarchie à 2 niveaux : marque (parentId: null) → modèle (parentId =
 // id de la marque). Profondeur plafonnée à 1, garantie ici par
 // assertValidParent — jamais dans le schéma Mongoose.
+import { del, put } from "@vercel/blob";
 import { connectDb } from "../lib/db.js";
+import { env } from "../lib/env.js";
 import { Document } from "../models/Document.js";
 import { Folder } from "../models/Folder.js";
 
@@ -227,4 +229,33 @@ export async function resolveFolderId(ownerId, space, folderId) {
   if (!folderId) return null;
   const folder = await getFolder(ownerId, folderId, space);
   return folder ? folder._id : null;
+}
+
+// Logo d'une marque (upload direct, petit fichier — pas besoin du flux
+// signé-client->Blob utilisé pour les documents). Remplace l'ancien blob
+// s'il y en avait un.
+export async function setFolderLogo(ownerId, id, space, { buffer, mimetype }) {
+  const folder = await getFolder(ownerId, id, space);
+  if (!folder) return null;
+  const previousBlobUrl = folder.logo?.blobUrl;
+  const blob = await put(`folder-logos/${ownerId}/${folder._id}`, buffer, {
+    access: "private",
+    addRandomSuffix: true,
+    contentType: mimetype,
+    token: env.blobToken,
+  });
+  folder.set("logo", { blobPath: blob.pathname, blobUrl: blob.url, mimetype });
+  await folder.save();
+  if (previousBlobUrl) await del(previousBlobUrl, { token: env.blobToken }).catch(() => {});
+  return folder;
+}
+
+export async function removeFolderLogo(ownerId, id, space) {
+  const folder = await getFolder(ownerId, id, space);
+  if (!folder) return null;
+  const previousBlobUrl = folder.logo?.blobUrl;
+  folder.set("logo", { blobPath: null, blobUrl: null, mimetype: null });
+  await folder.save();
+  if (previousBlobUrl) await del(previousBlobUrl, { token: env.blobToken }).catch(() => {});
+  return folder;
 }
