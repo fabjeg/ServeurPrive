@@ -9,7 +9,7 @@ import {
   getDocument,
   listDocuments,
 } from "../services/documents.js";
-import { getFolderDetail, listFolders } from "../services/folders.js";
+import { getFolderDetail, listFolders, updateFolder } from "../services/folders.js";
 
 export const chatRouter = Router();
 
@@ -37,7 +37,10 @@ Règles :
 - Réponds en texte simple, sans Markdown : pas de **gras** ni de titres #. Des tirets « - » pour les listes sont acceptés.
 - Si aucun document ne correspond, dis-le franchement avant de répondre de mémoire.
 - Les PDF scannés sans couche texte ne sont pas lisibles : signale-le si tu tombes dessus.
-- Tu es en lecture seule : tu ne peux ni ajouter, ni modifier, ni supprimer quoi que ce soit.`;
+- Tu es en lecture seule sur les documents : tu ne peux jamais en ajouter, modifier ou supprimer.
+- Tu peux en revanche renseigner la fiche technique d'un modèle (update_model_specs) quand un
+  document que tu viens de lire donne ces informations de façon fiable — jamais une valeur inventée
+  ou supposée. Dis à l'utilisateur ce que tu as enregistré.`;
 
 const TOOLS = [
   {
@@ -84,6 +87,33 @@ const TOOLS = [
         id: { type: "string", description: "Id du dossier (renvoyé par list_folders)" },
       },
       required: ["id"],
+    },
+  },
+  {
+    name: "update_model_specs",
+    description:
+      "Renseigne ou corrige la fiche technique d'un modèle (réfrigérant, huile, compresseur, " +
+      "charge, fusibles, pressions HP/BP, codes défauts) — uniquement à partir d'une information " +
+      "trouvée dans un document lu (read_document), jamais inventée. Seuls les champs fournis sont " +
+      "modifiés. fault_codes remplace la liste entière : fournir la liste complète voulue.",
+    input_schema: {
+      type: "object",
+      properties: {
+        folder_id: { type: "string", description: "Id du dossier modèle (renvoyé par search_documents/list_folders/get_folder)" },
+        refrigerant: { type: "string", description: "Ex. « R404A »" },
+        oil: { type: "string", description: "Ex. « POE 68 »" },
+        compressor: { type: "string", description: "Ex. « Denso 10PA17C »" },
+        charge: { type: "string", description: "Ex. « 2.4 kg »" },
+        fuses: { type: "string", description: "Ex. « 15 A »" },
+        pressure_hp: { type: "string", description: "Pression haute pression, ex. « 18 bar »" },
+        pressure_bp: { type: "string", description: "Pression basse pression, ex. « 2 bar »" },
+        fault_codes: {
+          type: "array",
+          items: { type: "string" },
+          description: "Liste complète des codes défauts (remplace l'existante)",
+        },
+      },
+      required: ["folder_id"],
     },
   },
 ];
@@ -144,6 +174,24 @@ async function runTool(ownerId, name, input) {
         stats: detail.stats,
       };
     }
+    case "update_model_specs": {
+      const specs = {
+        ...(input.refrigerant !== undefined && { refrigerant: input.refrigerant }),
+        ...(input.oil !== undefined && { oil: input.oil }),
+        ...(input.compressor !== undefined && { compressor: input.compressor }),
+        ...(input.charge !== undefined && { charge: input.charge }),
+        ...(input.fuses !== undefined && { fuses: input.fuses }),
+        ...(input.pressure_hp !== undefined && { pressureHp: input.pressure_hp }),
+        ...(input.pressure_bp !== undefined && { pressureBp: input.pressure_bp }),
+        ...(input.fault_codes !== undefined && { faultCodes: input.fault_codes }),
+      };
+      if (!Object.keys(specs).length) {
+        return { error: "Aucun champ fourni." };
+      }
+      const updated = await updateFolder(ownerId, String(input.folder_id || ""), SPACE, { specs });
+      if (!updated) return { error: "Dossier introuvable." };
+      return { folder: updated.toClient() };
+    }
     default:
       return { error: `Outil inconnu : ${name}` };
   }
@@ -155,6 +203,7 @@ const TOOL_LABELS = {
   read_document: () => "Lecture d'un document",
   list_folders: () => "Consultation des dossiers",
   get_folder: () => "Consultation d'un dossier",
+  update_model_specs: () => "Mise à jour de la fiche technique",
 };
 
 chatRouter.post("/", requireAuth, async (req, res) => {

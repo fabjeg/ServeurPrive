@@ -57,7 +57,7 @@ authentification.** Jamais de secret dans ce fichier ni dans le repo.
 
 ## Serveur MCP (`server/mcp/index.js`)
 
-Streamable HTTP stateless (un serveur par POST). Neuf tools :
+Streamable HTTP stateless (un serveur par POST). Dix tools :
 - `list_documents` (filtre `folder` par nom), `search_documents`,
   `get_document_content` (texte des PDF extrait via pdf-parse v2, classe `PDFParse`)
 - `add_document` : base64 ≤ **3 Mo** décodés (transite par la fonction,
@@ -79,9 +79,21 @@ Streamable HTTP stateless (un serveur par POST). Neuf tools :
   confirmation explicite de l'utilisateur dans la conversation — jamais à
   l'initiative de l'IA. `delete_folder` conserve les documents (détachés,
   non classés) et supprime aussi les modèles enfants d'une marque.
+- `update_model_specs` : fiche technique d'un modèle (réfrigérant, huile,
+  compresseur, charge, fusibles, pressions HP/BP, codes défauts —
+  `Folder.specs`, `server/models/Folder.js`). Merge champ par champ (un
+  champ omis n'écrase pas l'existant) ; `fault_codes` remplace la liste
+  entière. Pas de `confirmed` requis (additif/correctif, jamais destructeur)
+  — à n'utiliser qu'après avoir lu un document donnant l'info de façon
+  fiable, jamais une valeur inventée.
 
 Convention métadonnées : catégories/tags/dossiers en minuscules, style
 « carrier xarios 200 » / « schema electrique » (capitalisation en CSS).
+
+L'assistant web (`server/routes/chat.js`, bouton IA de l'appli) est
+lecture seule sur les documents mais peut lui aussi appeler
+`update_model_specs` (même logique de fusion) — seule capacité d'écriture
+qu'il possède.
 
 ## Commandes
 

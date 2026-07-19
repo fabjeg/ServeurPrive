@@ -17,6 +17,19 @@ const folderSchema = new mongoose.Schema(
     parentId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
     name: { type: String, required: true, trim: true, lowercase: true, maxlength: 80 },
     description: { type: String, default: "", trim: true, maxlength: 300 },
+    // Fiche technique — pertinente seulement pour un dossier modèle
+    // (parentId non nul), mais pas de garde de schéma pour ça : l'UI ne
+    // l'affiche que sur un modèle, comme pour childFolders/marque.
+    specs: {
+      refrigerant: { type: String, default: "", trim: true, maxlength: 60 },
+      oil: { type: String, default: "", trim: true, maxlength: 60 },
+      compressor: { type: String, default: "", trim: true, maxlength: 100 },
+      charge: { type: String, default: "", trim: true, maxlength: 40 },
+      fuses: { type: String, default: "", trim: true, maxlength: 60 },
+      pressureHp: { type: String, default: "", trim: true, maxlength: 40 },
+      pressureBp: { type: String, default: "", trim: true, maxlength: 40 },
+      faultCodes: { type: [String], default: [] },
+    },
     ownerId: { type: String, required: true, index: true },
     createdAt: { type: Date, default: Date.now },
   },
@@ -32,6 +45,16 @@ folderSchema.methods.toClient = function toClient() {
     parentId: this.parentId ? this.parentId.toString() : null,
     name: this.name,
     description: this.description,
+    specs: {
+      refrigerant: this.specs?.refrigerant || "",
+      oil: this.specs?.oil || "",
+      compressor: this.specs?.compressor || "",
+      charge: this.specs?.charge || "",
+      fuses: this.specs?.fuses || "",
+      pressureHp: this.specs?.pressureHp || "",
+      pressureBp: this.specs?.pressureBp || "",
+      faultCodes: this.specs?.faultCodes || [],
+    },
     createdAt: this.createdAt,
   };
 };

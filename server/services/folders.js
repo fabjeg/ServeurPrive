@@ -89,12 +89,35 @@ export async function getOrCreateFolder(ownerId, space, name, parentId = null) {
   );
 }
 
-export async function updateFolder(ownerId, id, space, { name, description, parentId }) {
+const SPEC_SCALAR_FIELDS = [
+  "refrigerant",
+  "oil",
+  "compressor",
+  "charge",
+  "fuses",
+  "pressureHp",
+  "pressureBp",
+];
+
+export async function updateFolder(ownerId, id, space, { name, description, parentId, specs }) {
   const folder = await getFolder(ownerId, id, space);
   if (!folder) return null;
   if (name !== undefined) folder.name = name;
   if (description !== undefined) folder.description = description;
   if (parentId !== undefined) folder.parentId = await assertValidParent(ownerId, space, parentId);
+  if (specs !== undefined) {
+    for (const field of SPEC_SCALAR_FIELDS) {
+      if (specs[field] !== undefined) folder.set(`specs.${field}`, specs[field]);
+    }
+    // faultCodes remplace la liste entière si fourni (même convention que
+    // `tags` sur updateDocument) — l'appelant envoie la liste complète voulue.
+    if (specs.faultCodes !== undefined) {
+      folder.set(
+        "specs.faultCodes",
+        specs.faultCodes.map((c) => String(c).trim()).filter(Boolean)
+      );
+    }
+  }
   await folder.save();
   return folder;
 }

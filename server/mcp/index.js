@@ -20,6 +20,7 @@ import {
   getFolderDetail,
   getOrCreateFolder,
   listFolders,
+  updateFolder,
 } from "../services/folders.js";
 
 // Le connecteur MCP ne voit JAMAIS l'espace personnel — cette constante est
@@ -494,6 +495,69 @@ function buildServer() {
       if (!folder) return textResult(`Dossier « ${name} » introuvable.`);
       await deleteFolder(OWNER_ID, folder._id.toString(), SPACE);
       return textResult(`Dossier « ${folder.name} » supprimé (documents conservés non classés).`);
+    }
+  );
+
+  server.registerTool(
+    "update_model_specs",
+    {
+      title: "Mettre à jour la fiche technique d'un modèle",
+      description:
+        "Renseigne ou corrige la fiche technique d'un modèle (réfrigérant, huile, compresseur, " +
+        "charge, fusibles, pressions HP/BP, codes défauts). À utiliser après avoir lu un document " +
+        "(get_document_content) qui donne ces informations de façon fiable — ne jamais inventer une " +
+        "valeur. Seuls les champs fournis sont modifiés, les autres restent inchangés ; fault_codes " +
+        "remplace la liste entière (fournir la liste complète voulue, existants inclus).",
+      inputSchema: {
+        model: z
+          .string()
+          .min(1)
+          .describe("Modèle, ex. « xarios 350 » ou « carrier xarios 350 » (créé s'il n'existe pas)"),
+        refrigerant: z.string().max(60).optional().describe("Ex. « R404A »"),
+        oil: z.string().max(60).optional().describe("Ex. « POE 68 »"),
+        compressor: z.string().max(100).optional().describe("Ex. « Denso 10PA17C »"),
+        charge: z.string().max(40).optional().describe("Ex. « 2.4 kg »"),
+        fuses: z.string().max(60).optional().describe("Ex. « 15 A »"),
+        pressure_hp: z.string().max(40).optional().describe("Pression haute pression, ex. « 18 bar »"),
+        pressure_bp: z.string().max(40).optional().describe("Pression basse pression, ex. « 2 bar »"),
+        fault_codes: z
+          .array(z.string().min(1).max(20))
+          .max(50)
+          .optional()
+          .describe("Liste complète des codes défauts (remplace l'existante)"),
+      },
+    },
+    async ({ model, refrigerant, oil, compressor, charge, fuses, pressure_hp, pressure_bp, fault_codes }) => {
+      const specs = {
+        ...(refrigerant !== undefined && { refrigerant }),
+        ...(oil !== undefined && { oil }),
+        ...(compressor !== undefined && { compressor }),
+        ...(charge !== undefined && { charge }),
+        ...(fuses !== undefined && { fuses }),
+        ...(pressure_hp !== undefined && { pressureHp: pressure_hp }),
+        ...(pressure_bp !== undefined && { pressureBp: pressure_bp }),
+        ...(fault_codes !== undefined && { faultCodes: fault_codes }),
+      };
+      if (!Object.keys(specs).length) {
+        return textResult(
+          "Aucun changement demandé : fournir au moins un champ (refrigerant, oil, compressor, " +
+            "charge, fuses, pressure_hp, pressure_bp, fault_codes)."
+        );
+      }
+      const folder = await resolveFolderLabel(OWNER_ID, SPACE, model);
+      const updated = await updateFolder(OWNER_ID, folder._id.toString(), SPACE, { specs });
+      const { specs: s } = updated.toClient();
+      const lines = [
+        s.refrigerant && `Réfrigérant : ${s.refrigerant}`,
+        s.oil && `Huile : ${s.oil}`,
+        s.compressor && `Compresseur : ${s.compressor}`,
+        s.charge && `Charge : ${s.charge}`,
+        s.fuses && `Fusibles : ${s.fuses}`,
+        s.pressureHp && `Pression HP : ${s.pressureHp}`,
+        s.pressureBp && `Pression BP : ${s.pressureBp}`,
+        s.faultCodes.length && `Codes défauts : ${s.faultCodes.join(", ")}`,
+      ].filter(Boolean);
+      return textResult(`Fiche technique de « ${updated.name} » mise à jour :\n${lines.join("\n")}`);
     }
   );
 

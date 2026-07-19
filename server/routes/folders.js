@@ -79,11 +79,12 @@ foldersRouter.patch("/:id", async (req, res, next) => {
   try {
     const space = parseSpace(req.body?.space);
     if (!space) return res.status(400).json(SPACE_ERROR);
-    const { name, description, parentId } = req.body || {};
+    const { name, description, parentId, specs } = req.body || {};
     const folder = await updateFolder(req.ownerId, req.params.id, space, {
       name,
       description,
       parentId,
+      specs,
     });
     if (!folder) return res.status(404).json({ error: "Dossier introuvable." });
     res.json({ folder: folder.toClient() });

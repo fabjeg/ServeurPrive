@@ -3,8 +3,36 @@ import { api } from "../api.js";
 import { DocumentGrid } from "./DocumentGrid.jsx";
 import { FolderCard } from "./FolderGrid.jsx";
 import { FolderForm } from "./FolderForm.jsx";
+import { SpecSheetForm } from "./SpecSheetForm.jsx";
 import { useBackClose } from "../hooks/useBackClose.js";
 import { categoryIcon, IconChevron } from "./Icons.jsx";
+
+const SPEC_FIELDS = [
+  { key: "refrigerant", label: "Réfrigérant" },
+  { key: "oil", label: "Huile" },
+  { key: "compressor", label: "Compresseur" },
+  { key: "charge", label: "Charge" },
+  { key: "fuses", label: "Fusibles" },
+  { key: "pressureHp", label: "Pression HP" },
+  { key: "pressureBp", label: "Pression BP" },
+];
+
+// "Documents clés" : au plus un lien par type, le plus récent, parmi les
+// documents déjà classés du modèle — filtre d'affichage uniquement, pas de
+// nouvelle relation en base (voir server/models/Folder.js).
+const KEY_DOC_MATCHERS = [
+  { key: "schema", label: "Schéma électrique", match: (c) => c.includes("schema electrique") },
+  { key: "ecu", label: "Connecteur ECU", match: (c) => c.includes("connecteur ecu") },
+  { key: "plaque", label: "Plaque signalétique", match: (c) => c.includes("plaque") },
+];
+
+function findKeyDocuments(documents) {
+  return KEY_DOC_MATCHERS.map(({ key, label, match }) => ({
+    key,
+    label,
+    doc: documents.find((d) => match(d.category)),
+  })).filter((k) => k.doc);
+}
 
 function StatTile({ icon: Icon, label, value }) {
   return (
@@ -76,6 +104,7 @@ export function FolderPage({
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState("");
   const [editingFolder, setEditingFolder] = useState(false);
+  const [editingSpecs, setEditingSpecs] = useState(false);
   const [creatingChild, setCreatingChild] = useState(false);
   const [descOpen, setDescOpen] = useState(false);
   const [openCategories, setOpenCategories] = useState(() => new Set());
@@ -176,6 +205,51 @@ export function FolderPage({
         </ul>
       )}
 
+      {!isBrand && (
+        <section className="folder-page__section">
+          <div className="folder-page__section-head">
+            <h2 className="folder-page__section-title">Fiche technique</h2>
+            <button type="button" className="btn" onClick={() => setEditingSpecs(true)}>
+              Modifier la fiche
+            </button>
+          </div>
+          <dl className="spec-sheet">
+            {SPEC_FIELDS.map((f) => (
+              <div className="spec-sheet__row" key={f.key}>
+                <dt>{f.label}</dt>
+                <dd>{folder.specs?.[f.key] || "—"}</dd>
+              </div>
+            ))}
+          </dl>
+          {folder.specs?.faultCodes?.length > 0 && (
+            <div className="spec-sheet__codes">
+              <span className="spec-sheet__codes-label">Codes défauts</span>
+              <ul className="spec-sheet__code-list">
+                {folder.specs.faultCodes.map((code) => (
+                  <li key={code} className="spec-sheet__code">
+                    {code}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {findKeyDocuments(documents).length > 0 && (
+            <div className="spec-sheet__keydocs">
+              <span className="spec-sheet__codes-label">Documents clés</span>
+              <ul className="spec-sheet__keydoc-list">
+                {findKeyDocuments(documents).map(({ key, label, doc }) => (
+                  <li key={key}>
+                    <button type="button" className="spec-sheet__keydoc" onClick={() => onOpenDoc(doc)}>
+                      {label} <span className="spec-sheet__keydoc-name">{doc.filename}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
+
       {isBrand && childFolders.length > 0 && (
         <section className="folder-page__section">
           <div className="folder-page__section-head">
@@ -236,6 +310,16 @@ export function FolderPage({
           onClose={() => setEditingFolder(false)}
           onSaved={() => {
             setEditingFolder(false);
+            onChanged();
+          }}
+        />
+      )}
+      {editingSpecs && (
+        <SpecSheetForm
+          folder={folder}
+          onClose={() => setEditingSpecs(false)}
+          onSaved={() => {
+            setEditingSpecs(false);
             onChanged();
           }}
         />
