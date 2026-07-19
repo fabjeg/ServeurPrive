@@ -115,12 +115,26 @@
     color: var(--text-muted);
   }
 
-  // Marque avec logo : plus de nom/description/chevron, juste le logo en
-  // grand et centré (même traitement que l'en-tête de la page de la marque).
+  // Marque avec logo : plus de nom/description/chevron ni de "case" (fond,
+  // bordure, ombre) — juste le logo, en grand, posé directement sur le fond
+  // de la page.
   &--logo {
     position: relative;
     justify-content: center;
-    min-height: 8rem;
+    min-height: 9rem;
+    padding: 1rem;
+    background: none;
+    border: none;
+    box-shadow: none;
+
+    &:hover {
+      transform: none;
+      box-shadow: none;
+
+      .folder-card__logo-big {
+        transform: scale(1.04);
+      }
+    }
   }
 
   &__badge--corner {
@@ -130,8 +144,11 @@
   }
 
   &__logo-big {
-    max-width: 70%;
-    max-height: 4.5rem;
+    max-width: 85%;
+    max-height: 7.5rem;
     object-fit: contain;
+    @media (prefers-reduced-motion: no-preference) {
+      transition: transform 120ms ease;
+    }
   }
 }
