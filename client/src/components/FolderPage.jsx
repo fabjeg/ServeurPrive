@@ -191,20 +191,27 @@ export function FolderPage({
         <button className="folder-page__back" onClick={onBack} aria-label="Retour aux dossiers">
           ←
         </button>
-        <div className="folder-page__title-row">
-          {isBrand && folder.hasLogo && (
+        {isBrand && folder.hasLogo ? (
+          <div className="folder-page__brand-logo-wrap">
             <img
-              className="folder-page__logo"
+              className="folder-page__brand-logo"
               src={api.folderLogoUrl(space, folder.id)}
-              alt=""
+              alt={folder.name}
             />
-          )}
-          <h1 className="folder-page__title">{folder.name}</h1>
-          <span className="folder-page__badge">
-            {stats.documentCount} doc{stats.documentCount > 1 ? "s" : ""} lié
-            {stats.documentCount > 1 ? "s" : ""}
-          </span>
-        </div>
+            <span className="folder-page__badge">
+              {stats.documentCount} doc{stats.documentCount > 1 ? "s" : ""} lié
+              {stats.documentCount > 1 ? "s" : ""}
+            </span>
+          </div>
+        ) : (
+          <div className="folder-page__title-row">
+            <h1 className="folder-page__title">{folder.name}</h1>
+            <span className="folder-page__badge">
+              {stats.documentCount} doc{stats.documentCount > 1 ? "s" : ""} lié
+              {stats.documentCount > 1 ? "s" : ""}
+            </span>
+          </div>
+        )}
         {folder.description && (
           <div className={`folder-page__desc-wrap ${descOpen ? "is-open" : ""}`}>
             <p className="folder-page__desc">{folder.description}</p>
