@@ -141,6 +141,42 @@
     }
   }
 
+  // Mobile : le titre en une seule ligne tronquée (au lieu d'un retour à la
+  // ligne illimité) — sur un écran étroit, un nom de fichier long pouvait
+  // faire grimper la hauteur de la barre jusqu'à masquer les boutons.
+  @media (max-width: 720px) {
+    &__bar {
+      padding: 0.75rem 1rem;
+      gap: 0.6rem;
+    }
+
+    &__name,
+    &__name-input {
+      font-size: var(--fs-base);
+    }
+
+    &__name {
+      display: block;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    &__stamp {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    &__actions {
+      gap: 0.35rem;
+
+      .btn {
+        padding: 0.4rem 0.6rem;
+      }
+    }
+  }
+
   // Mode lecture : la barre se réduit à un simple bouton de sortie flottant
   // pour maximiser la place du document — le chat reste accessible par-dessus
   // (position fixed, hors de ce composant, jamais masqué par ce mode).

@@ -33,6 +33,24 @@ function renderMessageText(text, onOpenReference) {
   return parts;
 }
 
+// Historique persistant côté navigateur (localStorage) : un seul fil de
+// conversation, conservé entre deux ouvertures du panneau et entre deux
+// visites — pas de synchronisation serveur, juste éviter de tout perdre au
+// rechargement de la page. "Effacer la conversation" écrase aussi ce stockage
+// (via l'effet de persistance ci-dessous, qui se redéclenche sur [] ).
+const HISTORY_KEY = "frigo:jarvis:history";
+const MAX_STORED_MESSAGES = 60;
+
+function loadHistory() {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 // Assistant documentaire : bouton flottant + panneau de conversation.
 // La réponse arrive en SSE depuis /api/chat (voir server/routes/chat.js) ;
 // l'historique vit côté client, en texte simple uniquement.
@@ -42,7 +60,7 @@ function renderMessageText(text, onOpenReference) {
 // l'assistant via un marqueur {{open:…}} — voir renderMessageText ci-dessus.
 export function ChatPanel({ contextDoc = null, onOpenReference }) {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState([]); // { role, text, status? }
+  const [messages, setMessages] = useState(loadHistory); // { role, text, status? }
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef(null);
@@ -53,6 +71,21 @@ export function ChatPanel({ contextDoc = null, onOpenReference }) {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, open]);
+
+  // Persiste après chaque échange (état "status"/"error" transitoire exclu,
+  // pour ne jamais réafficher un "Réflexion…" figé après un rechargement en
+  // plein milieu d'une réponse).
+  useEffect(() => {
+    const toStore = messages
+      .filter((m) => m.text)
+      .map((m) => ({ role: m.role, text: m.text }))
+      .slice(-MAX_STORED_MESSAGES);
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(toStore));
+    } catch {
+      // quota dépassé ou stockage indisponible (navigation privée) : pas bloquant
+    }
+  }, [messages]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
