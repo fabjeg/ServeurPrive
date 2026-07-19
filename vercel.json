@@ -13,5 +13,13 @@
     { "source": "/api/:path*", "destination": "/api/index" },
     { "source": "/.well-known/:path*", "destination": "/api/index" },
     { "source": "/:path((?!api).*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/:path((?!api|assets).*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" }
+      ]
+    }
   ]
 }
