@@ -28,9 +28,10 @@ function MobileMenu({ onClose, onLogout, themePreference, onChooseTheme }) {
 // Barre de navigation fixée en bas, visible uniquement en mobile (≤ 720px) :
 // la sidebar y est masquée, les dossiers restent accessibles via l'accueil.
 export function MobileNav({
-  active, // "home" | "unfiled" (les pages dossier comptent comme "home")
+  active, // "home" | "unfiled" | "repairs" (les pages dossier comptent comme "home")
   onSelectHome,
   onSelectUnfiled,
+  onSelectRepairs,
   onOpenUpload,
   onLogout,
   themePreference,
@@ -46,6 +47,12 @@ export function MobileNav({
           onClick={onSelectHome}
         >
           Dossiers
+        </button>
+        <button
+          className={`mobile-nav__item ${active === "repairs" ? "is-active" : ""}`}
+          onClick={onSelectRepairs}
+        >
+          Dépannage
         </button>
         <button className="mobile-nav__item mobile-nav__item--add" onClick={onOpenUpload}>
           Ajouter

@@ -11,6 +11,7 @@ import {
   deleteDocument,
   getDocumentAnySpace,
   listDocuments,
+  semanticSearchDocuments,
   updateDocument,
 } from "../services/documents.js";
 import { extractContent } from "../services/extractContent.js";
@@ -22,6 +23,7 @@ import {
   resolveFolderLabel,
   updateFolder,
 } from "../services/folders.js";
+import { createRepair, listRepairs, semanticSearchRepairs } from "../services/repairs.js";
 
 // Le connecteur MCP ne voit JAMAIS l'espace personnel — cette constante est
 // la SEULE source de vérité du space utilisé par tous les tools ci-dessous.
@@ -52,18 +54,51 @@ const ALLOWED_ADD_MIMETYPES = new Set([
   "application/json",
 ]);
 
+// Accepte aussi bien un document Mongoose brut (listDocuments) qu'un objet
+// .toClient() (semanticSearchDocuments) — seul le nom du champ id diffère.
 function docLine(d) {
+  const id = d._id || d.id;
   const kb = Math.round((d.size || 0) / 1024);
   const summaryPart =
     d.summaryStatus === "done" && d.summary ? `\n  Résumé : ${d.summary}` : "";
   const folderPart = d.folderId ? `, dossier: ${d.folderId}` : ", non classé";
-  return `- [${d._id}] ${d.filename} — catégorie: ${d.category}${
+  return `- [${id}] ${d.filename} — catégorie: ${d.category}${
     d.tags.length ? `, tags: ${d.tags.join(", ")}` : ""
-  }${folderPart}, ${kb} Ko, ajouté le ${d.uploadedAt.toISOString().slice(0, 10)}${summaryPart}`;
+  }${folderPart}, ${kb} Ko, ajouté le ${new Date(d.uploadedAt).toISOString().slice(0, 10)}${summaryPart}`;
 }
 
 function textResult(text) {
   return { content: [{ type: "text", text }] };
+}
+
+// Fusionne deux listes de documents/dépannages par id (sémantique
+// d'abord, puis mot-clé pour les items non déjà inclus) — recherche
+// hybride app-level, voir server/lib/embeddings.js.
+function mergeById(primary, secondary, limit) {
+  const idOf = (x) => (x.id || x._id?.toString());
+  const seen = new Set(primary.map(idOf));
+  const merged = [...primary];
+  for (const x of secondary) {
+    const id = idOf(x);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    merged.push(x);
+  }
+  return merged.slice(0, limit);
+}
+
+function repairLine(r) {
+  const parts = [`- [${r.id}] ${r.symptom}`];
+  if (r.folderName) parts.push(`modèle: ${r.folderName}`);
+  parts.push(r.resolved ? "résolu" : "non résolu");
+  if (r.faultCodes.length) parts.push(`codes: ${r.faultCodes.join(", ")}`);
+  const line = parts.join(" — ");
+  const extra = [
+    r.diagnosis && `  Diagnostic : ${r.diagnosis}`,
+    r.solution && `  Solution : ${r.solution}`,
+    r.partsUsed.length && `  Pièces : ${r.partsUsed.join(", ")}`,
+  ].filter(Boolean);
+  return [line, ...extra].join("\n");
 }
 
 function buildServer() {
@@ -117,13 +152,19 @@ function buildServer() {
     "search_documents",
     {
       title: "Rechercher des documents",
-      description: "Recherche par nom de fichier, tag ou catégorie (mots-clés).",
+      description:
+        "Recherche par mots-clés ET par sens (nom de fichier, tag, catégorie, résumé) — tolère les " +
+        "reformulations qui ne matchent aucun mot-clé exact.",
       inputSchema: {
-        query: z.string().min(1).describe("Mots-clés à rechercher"),
+        query: z.string().min(1).describe("Mots-clés ou description libre à rechercher"),
       },
     },
     async ({ query }) => {
-      const docs = await listDocuments(OWNER_ID, { space: SPACE, q: query, limit: 50 });
+      const [keywordDocs, semanticDocs] = await Promise.all([
+        listDocuments(OWNER_ID, { space: SPACE, q: query, limit: 50 }),
+        semanticSearchDocuments(OWNER_ID, SPACE, query, 25),
+      ]);
+      const docs = mergeById(semanticDocs, keywordDocs, 50);
       if (!docs.length) return textResult(`Aucun document trouvé pour « ${query} ».`);
       return textResult(
         `${docs.length} résultat(s) pour « ${query} » :\n${docs.map(docLine).join("\n")}`
@@ -552,6 +593,79 @@ function buildServer() {
         s.faultCodes.length && `Codes défauts : ${s.faultCodes.join(", ")}`,
       ].filter(Boolean);
       return textResult(`Fiche technique de « ${updated.name} » mise à jour :\n${lines.join("\n")}`);
+    }
+  );
+
+  server.registerTool(
+    "search_repair_cases",
+    {
+      title: "Rechercher dans l'historique de dépannage",
+      description:
+        "Recherche dans l'historique de cas de dépannage déjà résolus (symptôme, diagnostic, " +
+        "solution, codes défauts, pièces utilisées). À utiliser dès qu'on te décrit une panne, en " +
+        "complément des documents — cet historique grossit avec le temps, donc de plus en plus utile.",
+      inputSchema: {
+        query: z.string().optional().describe("Mots-clés (symptôme, code défaut, cause…)"),
+        model: z.string().optional().describe("Limiter à un modèle (nom exact, voir list_folders)"),
+      },
+    },
+    async ({ query, model }) => {
+      let folderId;
+      if (model) {
+        const f = await findFolderByName(OWNER_ID, SPACE, model);
+        if (!f) return textResult(`Dossier « ${model} » introuvable (voir list_folders).`);
+        folderId = f._id.toString();
+      }
+      const [keywordRepairs, semanticRepairs] = await Promise.all([
+        listRepairs(OWNER_ID, SPACE, { q: query, folderId }),
+        query ? semanticSearchRepairs(OWNER_ID, SPACE, query, { folderId }) : [],
+      ]);
+      const repairs = query ? mergeById(semanticRepairs, keywordRepairs, 50) : keywordRepairs;
+      if (!repairs.length) return textResult("Aucun cas ne correspond à cette recherche.");
+      return textResult(`${repairs.length} cas :\n${repairs.map(repairLine).join("\n")}`);
+    }
+  );
+
+  server.registerTool(
+    "add_repair_case",
+    {
+      title: "Enregistrer un cas de dépannage",
+      description:
+        "Ajoute un cas à l'historique de dépannage (symptôme, diagnostic, solution, codes défauts, " +
+        "pièces utilisées). Action additive, jamais destructrice — mais ne l'utilise qu'après avoir " +
+        "proposé à l'utilisateur d'enregistrer le cas et reçu son accord explicite dans la " +
+        "conversation, jamais de ta propre initiative.",
+      inputSchema: {
+        symptom: z.string().min(1).max(300).describe("Description de la panne"),
+        diagnosis: z.string().max(1000).optional().describe("Cause identifiée"),
+        solution: z.string().max(1000).optional().describe("Réparation effectuée"),
+        fault_codes: z.array(z.string()).max(50).optional().describe("Codes défauts observés"),
+        parts_used: z.array(z.string()).max(50).optional().describe("Pièces utilisées"),
+        resolved: z.boolean().optional().describe("Panne résolue (défaut true)"),
+        model: z
+          .string()
+          .optional()
+          .describe("Modèle concerné, ex. « carrier xarios 350 » (créé au besoin), optionnel"),
+      },
+    },
+    async ({ symptom, diagnosis, solution, fault_codes, parts_used, resolved, model }) => {
+      const folder = model ? await resolveFolderLabel(OWNER_ID, SPACE, model) : null;
+      const repair = await createRepair(OWNER_ID, SPACE, {
+        folderId: folder?._id || null,
+        symptom,
+        diagnosis,
+        solution,
+        faultCodes: fault_codes,
+        partsUsed: parts_used,
+        resolved,
+        source: "jarvis",
+      });
+      return textResult(
+        `Cas de dépannage enregistré${folder ? ` (modèle « ${folder.name} »)` : ""} :\n${repairLine({
+          ...repair.toClient(),
+          folderName: folder?.name || null,
+        })}`
+      );
     }
   );
 

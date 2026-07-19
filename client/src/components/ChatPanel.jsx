@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { api } from "../api.js";
 import { IconAlert, IconBot, IconSend, IconTrash } from "./Icons.jsx";
 
 // Marqueur émis par l'assistant (voir SYSTEM_PROMPT dans server/routes/chat.js)
@@ -33,34 +34,17 @@ function renderMessageText(text, onOpenReference) {
   return parts;
 }
 
-// Historique persistant côté navigateur (localStorage) : un seul fil de
-// conversation, conservé entre deux ouvertures du panneau et entre deux
-// visites — pas de synchronisation serveur, juste éviter de tout perdre au
-// rechargement de la page. "Effacer la conversation" écrase aussi ce stockage
-// (via l'effet de persistance ci-dessous, qui se redéclenche sur [] ).
-const HISTORY_KEY = "frigo:jarvis:history";
-const MAX_STORED_MESSAGES = 60;
-
-function loadHistory() {
-  try {
-    const raw = localStorage.getItem(HISTORY_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
 // Assistant documentaire : bouton flottant + panneau de conversation.
-// La réponse arrive en SSE depuis /api/chat (voir server/routes/chat.js) ;
-// l'historique vit côté client, en texte simple uniquement.
+// La réponse arrive en SSE depuis /api/chat (voir server/routes/chat.js).
+// L'historique est persisté côté serveur (services/chatHistory.js) — chargé
+// au montage, plus de localStorage : source de vérité partagée entre appareils.
 // contextDoc : document ouvert dans le viewer — transmis au serveur pour que
 // « ce document » désigne celui-là (le bot le lit avec read_document).
 // onOpenReference(docId, page) : ouvre un document (et sa page) cité par
 // l'assistant via un marqueur {{open:…}} — voir renderMessageText ci-dessus.
 export function ChatPanel({ contextDoc = null, onOpenReference }) {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState(loadHistory); // { role, text, status? }
+  const [messages, setMessages] = useState([]); // { role, text, status? }
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef(null);
@@ -68,24 +52,16 @@ export function ChatPanel({ contextDoc = null, onOpenReference }) {
   const abortRef = useRef(null);
 
   useEffect(() => {
+    api
+      .chatHistory()
+      .then((res) => setMessages(res.messages.map((m) => ({ role: m.role, text: m.text }))))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, open]);
-
-  // Persiste après chaque échange (état "status"/"error" transitoire exclu,
-  // pour ne jamais réafficher un "Réflexion…" figé après un rechargement en
-  // plein milieu d'une réponse).
-  useEffect(() => {
-    const toStore = messages
-      .filter((m) => m.text)
-      .map((m) => ({ role: m.role, text: m.text }))
-      .slice(-MAX_STORED_MESSAGES);
-    try {
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(toStore));
-    } catch {
-      // quota dépassé ou stockage indisponible (navigation privée) : pas bloquant
-    }
-  }, [messages]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
@@ -104,8 +80,11 @@ export function ChatPanel({ contextDoc = null, onOpenReference }) {
     setInput("");
     setBusy(true);
 
-    const history = [...messages, { role: "user", text }];
-    setMessages([...history, { role: "assistant", text: "", status: "Réflexion…" }]);
+    setMessages((all) => [
+      ...all,
+      { role: "user", text },
+      { role: "assistant", text: "", status: "Réflexion…" },
+    ]);
 
     const patchLast = (patch) =>
       setMessages((all) => {
@@ -130,7 +109,7 @@ export function ChatPanel({ contextDoc = null, onOpenReference }) {
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
         body: JSON.stringify({
-          messages: history.map((m) => ({ role: m.role, text: m.text })),
+          text,
           documentId: contextDoc?.id || undefined,
         }),
       });
@@ -230,6 +209,7 @@ export function ChatPanel({ contextDoc = null, onOpenReference }) {
                   onClick={() => {
                     abortRef.current?.abort();
                     setMessages([]);
+                    api.clearChatHistory().catch(() => {});
                   }}
                   aria-label="Effacer la conversation"
                   title="Effacer la conversation"

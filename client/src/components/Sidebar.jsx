@@ -1,3 +1,5 @@
+import { IconAlert } from "./Icons.jsx";
+
 const THEME_OPTIONS = [
   { value: "light", label: "Clair" },
   { value: "dark", label: "Sombre" },
@@ -49,6 +51,7 @@ export function Sidebar({
   onSelectHome,
   onSelectFolder,
   onSelectUnfiled,
+  onSelectRepairs,
   onOpenUpload,
   onLogout,
   themePreference,
@@ -77,6 +80,14 @@ export function Sidebar({
         >
           <span>Tous les dossiers</span>
           <span className="sidebar__count">{total}</span>
+        </button>
+        <button
+          className={`sidebar__item ${activeFolderId === "repairs" ? "is-active" : ""}`}
+          onClick={onSelectRepairs}
+        >
+          <span className="sidebar__item-label">
+            <IconAlert /> Dépannage
+          </span>
         </button>
         {folders.map((f) => (
           <button

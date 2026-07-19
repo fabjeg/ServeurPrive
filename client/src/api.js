@@ -66,6 +66,20 @@ export const api = {
     request(`/api/folders/${id}/logo?${withSpace(space)}`, { method: "DELETE" }),
   folderLogoUrl: (space, id) => `/api/folders/${id}/logo?${withSpace(space)}`,
 
+  // Dépannage : historique de pannes (pro uniquement côté UI/assistant).
+  listRepairs: (space, { folderId, q } = {}) =>
+    request(`/api/repairs?${withSpace(space, { folderId, q })}`),
+  createRepair: (space, body) =>
+    request("/api/repairs", { method: "POST", body: { ...body, space } }),
+  updateRepair: (space, id, body) =>
+    request(`/api/repairs/${id}`, { method: "PATCH", body: { ...body, space } }),
+  deleteRepair: (space, id) =>
+    request(`/api/repairs/${id}?${withSpace(space)}`, { method: "DELETE" }),
+
+  // Historique de conversation Jarvis, persisté côté serveur (pro uniquement).
+  chatHistory: () => request("/api/chat/history"),
+  clearChatHistory: () => request("/api/chat/history", { method: "DELETE" }),
+
   // URLs du proxy authentifié — jamais d'URL Blob directe.
   fileUrl: (space, id) => `/api/documents/${id}/file?${withSpace(space)}`,
   downloadUrl: (space, id) => `/api/documents/${id}/file?${withSpace(space, { download: "1" })}`,

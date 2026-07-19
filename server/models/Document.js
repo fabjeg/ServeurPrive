@@ -43,6 +43,12 @@ const documentSchema = new mongoose.Schema(
     // server/services/documents.js:processNewDocument). Jamais renvoyé au
     // client (potentiellement long), voir toClient().
     extractedText: { type: String, default: "" },
+    // Vecteur d'embedding (gemini-embedding-001) pour la recherche sémantique
+    // app-level — voir server/lib/embeddings.js. Absent/vide = document pas
+    // encore traité (ou créé avant ce champ) : simplement ignoré du
+    // classement sémantique, reste trouvable par mot-clé. Jamais renvoyé au
+    // client (voir toClient()).
+    embedding: { type: [Number], default: [] },
     uploadedAt: { type: Date, default: Date.now },
   },
   { versionKey: false }

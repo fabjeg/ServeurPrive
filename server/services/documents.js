@@ -3,6 +3,7 @@ import { del, put } from "@vercel/blob";
 import { waitUntil } from "@vercel/functions";
 import { connectDb } from "../lib/db.js";
 import { env } from "../lib/env.js";
+import { cosineSimilarity, embedText } from "../lib/embeddings.js";
 import { Document } from "../models/Document.js";
 import { extractContent, MAX_TEXT_CHARS } from "./extractContent.js";
 import { generateSummary } from "./summarize.js";
@@ -19,6 +20,50 @@ function requireSpace(space) {
   if (space !== "pro" && space !== "perso") {
     throw new Error(`space invalide ou manquant : ${space}`);
   }
+}
+
+const MAX_EMBED_CHARS = 2000;
+
+// Recharge le document (pour prendre le summary fraîchement écrit par
+// generateSummary) et calcule son embedding — best-effort, comme
+// generateSummary : un échec laisse simplement le document sans embedding,
+// il reste trouvable par mot-clé (voir semanticSearchDocuments ci-dessous).
+async function embedDocument(docId) {
+  try {
+    await connectDb();
+    const doc = await Document.findById(docId);
+    if (!doc) return;
+    const text = [doc.filename, doc.category, doc.tags.join(" "), doc.summary]
+      .filter(Boolean)
+      .join(" — ")
+      .slice(0, MAX_EMBED_CHARS);
+    if (!text.trim()) return;
+    const embedding = await embedText(text);
+    if (embedding.length) {
+      await Document.findByIdAndUpdate(docId, { embedding }).catch(() => {});
+    }
+  } catch (err) {
+    console.error(`Embedding échoué pour le document ${docId} :`, err?.message || err);
+  }
+}
+
+// Recherche sémantique app-level (pas d'Atlas Vector Search — voir
+// CLAUDE.md) : similarité cosinus calculée en mémoire sur tous les
+// documents déjà embeddés de cet owner/space. Suffisant à l'échelle d'un
+// coffre mono-utilisateur, jamais un remplacement de listDocuments (regex) —
+// combiné avec elle, voir server/routes/chat.js et server/mcp/index.js.
+export async function semanticSearchDocuments(ownerId, space, query, limit = 10) {
+  requireSpace(space);
+  if (!query || !String(query).trim()) return [];
+  await connectDb();
+  const queryEmbedding = await embedText(query).catch(() => []);
+  if (!queryEmbedding.length) return [];
+  const docs = await Document.find({ ownerId, space, embedding: { $ne: [] } });
+  return docs
+    .map((d) => ({ doc: d, score: cosineSimilarity(queryEmbedding, d.embedding) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map(({ doc }) => doc.toClient());
 }
 
 export async function listDocuments(
@@ -113,6 +158,7 @@ export async function processNewDocument(doc) {
   }
 
   await generateSummary(doc, extracted);
+  await embedDocument(doc._id);
 }
 
 // Classement automatique à partir d'un texte déjà extrait (pdf-parse ou OCR
@@ -240,6 +286,7 @@ export async function processScanDocument(doc, space, pages) {
       text: combinedText,
       pages: ocrPages.length,
     });
+    await embedDocument(doc._id);
   } catch (err) {
     console.error(`Traitement OCR échoué pour le document ${doc._id} :`, err?.message || err);
     await connectDb();

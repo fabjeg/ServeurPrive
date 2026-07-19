@@ -80,6 +80,16 @@
     }
   }
 
+  &__item-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+
+    svg {
+      flex-shrink: 0;
+    }
+  }
+
   &__count {
     font-family: $font-mono;
     font-size: var(--fs-sm);

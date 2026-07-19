@@ -7,6 +7,7 @@ import { DocumentGrid } from "../components/DocumentGrid.jsx";
 import { FolderGrid } from "../components/FolderGrid.jsx";
 import { FolderPage } from "../components/FolderPage.jsx";
 import { FolderForm } from "../components/FolderForm.jsx";
+import { RepairsPage } from "../components/RepairsPage.jsx";
 import { UploadPanel } from "../components/UploadPanel.jsx";
 import { Viewer } from "../components/Viewer.jsx";
 import { ChatPanel } from "../components/ChatPanel.jsx";
@@ -131,10 +132,19 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
         onChangeSpace={() => navigate("/")}
         folders={folders}
         unfiledCount={unfiledCount}
-        activeFolderId={view.name === "folder" ? view.folderId : view.name === "unfiled" ? "unfiled" : ""}
+        activeFolderId={
+          view.name === "folder"
+            ? view.folderId
+            : view.name === "unfiled"
+              ? "unfiled"
+              : view.name === "repairs"
+                ? "repairs"
+                : ""
+        }
         onSelectHome={goHome}
         onSelectFolder={(f) => setView({ name: "folder", folderId: f.id, folderName: f.name })}
         onSelectUnfiled={() => setView({ name: "unfiled" })}
+        onSelectRepairs={() => setView({ name: "repairs" })}
         onOpenUpload={() =>
           setUpload({
             folderId: view.name === "folder" ? view.folderId : undefined,
@@ -211,12 +221,15 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
             />
           </section>
         )}
+
+        {view.name === "repairs" && <RepairsPage space={SPACE} onBack={goHome} />}
       </main>
 
       <MobileNav
-        active={view.name === "unfiled" ? "unfiled" : "home"}
+        active={view.name === "unfiled" ? "unfiled" : view.name === "repairs" ? "repairs" : "home"}
         onSelectHome={goHome}
         onSelectUnfiled={() => setView({ name: "unfiled" })}
+        onSelectRepairs={() => setView({ name: "repairs" })}
         onOpenUpload={() =>
           setUpload({
             folderId: view.name === "folder" ? view.folderId : undefined,

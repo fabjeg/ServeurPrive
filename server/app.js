@@ -7,6 +7,7 @@ import { env } from "./lib/env.js";
 import { authRouter } from "./routes/auth.js";
 import { documentsRouter } from "./routes/documents.js";
 import { foldersRouter } from "./routes/folders.js";
+import { repairsRouter } from "./routes/repairs.js";
 import { uploadRouter } from "./routes/upload.js";
 import { chatRouter } from "./routes/chat.js";
 import { mcpRouter } from "./mcp/index.js";
@@ -27,6 +28,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/upload", uploadRouter);
 app.use("/api/documents", documentsRouter);
 app.use("/api/folders", foldersRouter);
+app.use("/api/repairs", repairsRouter);
 app.use("/api/chat", chatRouter);
 app.use("/api/mcp/:token", mcpRouter); // jeton dans l'URL (connecteur claude.ai)
 app.use("/api/mcp", mcpRouter); // jeton en Bearer (Claude Code, API)

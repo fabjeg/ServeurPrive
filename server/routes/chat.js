@@ -8,6 +8,7 @@ import {
   extractDocumentText,
   getDocument,
   listDocuments,
+  semanticSearchDocuments,
   updateDocument,
 } from "../services/documents.js";
 import {
@@ -17,6 +18,8 @@ import {
   resolveFolderLabel,
   updateFolder,
 } from "../services/folders.js";
+import { createRepair, listRepairs, semanticSearchRepairs } from "../services/repairs.js";
+import { appendMessage, clearHistory, getHistory } from "../services/chatHistory.js";
 
 export const chatRouter = Router();
 
@@ -65,7 +68,18 @@ Règles :
   confirmation à chacun. Termine toujours par un récapitulatif de ce qui a été déplacé (et vers où).
 - Tu peux aussi renseigner la fiche technique d'un modèle (update_model_specs) quand un document que
   tu viens de lire donne ces informations de façon fiable — jamais une valeur inventée ou supposée.
-- Dis toujours à l'utilisateur ce que tu as modifié.`;
+- Dis toujours à l'utilisateur ce que tu as modifié.
+
+Historique de dépannage :
+- Le coffre contient aussi un historique de cas de dépannage déjà résolus (symptôme, diagnostic,
+  solution, codes défauts, pièces utilisées). Quand on te décrit une panne, consulte-le en premier
+  avec search_repair_cases (mots-clés du symptôme et/ou modèle concerné) en complément des documents
+  — plus cet historique grossit, plus tes réponses deviennent pertinentes.
+- Quand un dépannage se conclut dans la conversation (panne résolue, ou tentative notable même non
+  résolue), propose à l'utilisateur d'enregistrer le cas (résume symptôme/diagnostic/solution) et
+  n'appelle log_repair_case qu'après un accord explicite de sa part dans le fil — jamais
+  silencieusement, contrairement à update_document/update_model_specs qui peuvent s'exécuter sans
+  demander si le contexte est sans ambiguïté.`;
 
 const TOOLS = [
   {
@@ -180,6 +194,40 @@ const TOOLS = [
       required: ["folder_id"],
     },
   },
+  {
+    name: "search_repair_cases",
+    description:
+      "Recherche dans l'historique de dépannage (cas déjà résolus : symptôme, diagnostic, solution, " +
+      "codes défauts, pièces utilisées). À appeler dès qu'on te décrit une panne, avant ou en " +
+      "complément de la recherche documentaire — l'historique s'enrichit avec le temps.",
+    input_schema: {
+      type: "object",
+      properties: {
+        q: { type: "string", description: "Mots-clés (symptôme, code défaut, cause…), optionnel" },
+        folder_id: { type: "string", description: "Limiter au modèle concerné (id de dossier), optionnel" },
+      },
+    },
+  },
+  {
+    name: "log_repair_case",
+    description:
+      "Enregistre un nouveau cas dans l'historique de dépannage. N'appelle cet outil qu'après avoir " +
+      "proposé à l'utilisateur d'enregistrer le cas et reçu son accord explicite dans la conversation " +
+      "— jamais de ta propre initiative.",
+    input_schema: {
+      type: "object",
+      properties: {
+        folder_id: { type: "string", description: "Id du dossier modèle concerné, optionnel" },
+        symptom: { type: "string", description: "Description de la panne" },
+        diagnosis: { type: "string", description: "Cause identifiée, optionnel" },
+        solution: { type: "string", description: "Réparation effectuée, optionnel" },
+        fault_codes: { type: "array", items: { type: "string" }, description: "Codes défauts observés, optionnel" },
+        parts_used: { type: "array", items: { type: "string" }, description: "Pièces utilisées, optionnel" },
+        resolved: { type: "boolean", description: "Panne résolue (défaut true)" },
+      },
+      required: ["symptom"],
+    },
+  },
 ];
 
 const docSummary = (d) => ({
@@ -193,17 +241,41 @@ const docSummary = (d) => ({
   uploadedAt: d.uploadedAt,
 });
 
+// Fusionne deux listes par id : la première (résultats sémantiques,
+// déjà classés par pertinence) prime, la seconde (mot-clé) complète sans
+// doublon — voir server/lib/embeddings.js pour le pourquoi de cette
+// recherche hybride app-level.
+function mergeById(primary, secondary, limit) {
+  const seen = new Set(primary.map((x) => x.id));
+  const merged = [...primary];
+  for (const x of secondary) {
+    if (seen.has(x.id)) continue;
+    seen.add(x.id);
+    merged.push(x);
+  }
+  return merged.slice(0, limit);
+}
+
 async function runTool(ownerId, name, input) {
   switch (name) {
     case "search_documents": {
-      const docs = await listDocuments(ownerId, {
-        space: SPACE,
-        q: input.q || undefined,
-        folder: input.folder_id,
-        limit: Math.min(Number(input.limit) || 25, 200),
-      });
-      if (!docs.length) return { results: [], note: "Aucun document ne correspond à ces filtres." };
-      return { results: docs.map((d) => docSummary(d.toClient ? d.toClient() : d)) };
+      const limit = Math.min(Number(input.limit) || 25, 200);
+      const [keywordDocs, semanticDocs] = await Promise.all([
+        listDocuments(ownerId, {
+          space: SPACE,
+          q: input.q || undefined,
+          folder: input.folder_id,
+          limit,
+        }),
+        input.q ? semanticSearchDocuments(ownerId, SPACE, input.q, limit) : [],
+      ]);
+      const semanticSummaries = semanticDocs.map(docSummary);
+      const keywordSummaries = keywordDocs.map((d) => docSummary(d.toClient ? d.toClient() : d));
+      const results = input.q
+        ? mergeById(semanticSummaries, keywordSummaries, limit)
+        : keywordSummaries;
+      if (!results.length) return { results: [], note: "Aucun document ne correspond à ces filtres." };
+      return { results };
     }
     case "read_document": {
       const doc = await getDocument(ownerId, String(input.id || ""), SPACE);
@@ -285,6 +357,33 @@ async function runTool(ownerId, name, input) {
       if (!updated) return { error: "Dossier introuvable." };
       return { folder: updated.toClient() };
     }
+    case "search_repair_cases": {
+      const [keywordRepairs, semanticRepairs] = await Promise.all([
+        listRepairs(ownerId, SPACE, { q: input.q || undefined, folderId: input.folder_id || undefined }),
+        input.q
+          ? semanticSearchRepairs(ownerId, SPACE, input.q, { folderId: input.folder_id || undefined })
+          : [],
+      ]);
+      const repairs = input.q ? mergeById(semanticRepairs, keywordRepairs, 25) : keywordRepairs;
+      if (!repairs.length) return { results: [], note: "Aucun cas ne correspond." };
+      return { results: repairs };
+    }
+    case "log_repair_case": {
+      if (!input.symptom || !String(input.symptom).trim()) {
+        return { error: "symptom requis." };
+      }
+      const repair = await createRepair(ownerId, SPACE, {
+        folderId: input.folder_id || null,
+        symptom: input.symptom,
+        diagnosis: input.diagnosis,
+        solution: input.solution,
+        faultCodes: input.fault_codes,
+        partsUsed: input.parts_used,
+        resolved: input.resolved,
+        source: "jarvis",
+      });
+      return { repair: repair.toClient() };
+    }
     default:
       return { error: `Outil inconnu : ${name}` };
   }
@@ -298,19 +397,43 @@ const TOOL_LABELS = {
   get_folder: () => "Consultation d'un dossier",
   update_document: () => "Modification du document",
   update_model_specs: () => "Mise à jour de la fiche technique",
+  search_repair_cases: () => "Recherche dans l'historique de dépannage",
+  log_repair_case: () => "Enregistrement d'un cas de dépannage",
 };
 
+// Historique de conversation persistant côté serveur (voir services/chatHistory.js) :
+// le client n'envoie plus que le nouveau message, plus tout le fil — le
+// serveur est la source de vérité, partagée entre appareils.
+chatRouter.get("/history", requireAuth, async (req, res, next) => {
+  try {
+    const messages = await getHistory(req.ownerId, SPACE, MAX_HISTORY_MESSAGES);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json({ messages });
+  } catch (err) {
+    next(err);
+  }
+});
+
+chatRouter.delete("/history", requireAuth, async (req, res, next) => {
+  try {
+    await clearHistory(req.ownerId, SPACE);
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 chatRouter.post("/", requireAuth, async (req, res) => {
-  // Historique côté client : uniquement des tours texte (les échanges d'outils
-  // d'un tour précédent ne sont pas rejoués — le modèle re-cherche au besoin).
-  const history = Array.isArray(req.body?.messages) ? req.body.messages : [];
-  const messages = history
-    .filter((m) => (m?.role === "user" || m?.role === "assistant") && typeof m.text === "string")
-    .slice(-MAX_HISTORY_MESSAGES)
-    .map((m) => ({ role: m.role, content: m.text }));
-  if (!messages.length || messages[messages.length - 1].role !== "user") {
+  const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+  if (!text) {
     return res.status(400).json({ error: "Message utilisateur manquant." });
   }
+
+  const previous = await getHistory(req.ownerId, SPACE, MAX_HISTORY_MESSAGES);
+  const messages = [...previous, { role: "user", text }]
+    .slice(-MAX_HISTORY_MESSAGES)
+    .map((m) => ({ role: m.role, content: m.text }));
+  await appendMessage(req.ownerId, SPACE, { role: "user", text });
 
   // Contexte optionnel : le document ouvert dans le viewer, ajouté à la suite
   // du prompt système (Gemini ne gère qu'une instruction système simple, pas
@@ -345,24 +468,32 @@ chatRouter.post("/", requireAuth, async (req, res) => {
     if (!res.writableEnded) aborted = true;
   });
 
+  let assistantText = "";
   try {
     await runChatLoop({
       history: messages,
       system,
       tools: TOOLS,
       runTool: (name, args) => runTool(req.ownerId, name, args),
-      onDelta: (text) => {
-        if (!aborted) send({ type: "delta", text });
+      onDelta: (delta) => {
+        assistantText += delta;
+        if (!aborted) send({ type: "delta", text: delta });
       },
       onToolCall: ({ name, args }) => {
         if (!aborted) send({ type: "tool", label: TOOL_LABELS[name]?.(args) || name });
       },
     });
+    if (assistantText.trim()) {
+      await appendMessage(req.ownerId, SPACE, { role: "assistant", text: assistantText });
+    }
     if (aborted) return;
     send({ type: "done" });
     res.end();
   } catch (err) {
     console.error("Erreur chatbot :", err);
+    if (assistantText.trim()) {
+      await appendMessage(req.ownerId, SPACE, { role: "assistant", text: assistantText });
+    }
     send({ type: "error", message: friendlyError(err) });
     send({ type: "done" });
     res.end();

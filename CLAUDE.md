@@ -43,6 +43,41 @@ authentification.** Jamais de secret dans ce fichier ni dans le repo.
 - **Auth** : JWT cookie + TOTP optionnel, utilisateur unique défini par env.
   Supprimer la variable `TOTP_SECRET` sur Vercel désactive la 2FA
   (récupération en cas de perte de l'authenticator).
+- **Dépannage** (`server/models/Repair.js`, `server/services/repairs.js`,
+  onglet dédié `RepairsPage.jsx`) : historique de cas réels (symptôme,
+  diagnostic, solution, codes défauts, pièces utilisées), pro-only comme
+  Jarvis/MCP, rattachement à un modèle optionnel. Alimenté à la main via le
+  formulaire de l'appli, ou par Jarvis/MCP (`log_repair_case`/
+  `add_repair_case`) qui ne l'appelle qu'après accord explicite de
+  l'utilisateur dans la conversation — jamais silencieusement. Pas
+  d'entraînement de modèle : la pertinence de Jarvis vient de la recherche
+  (`search_repair_cases`) dans une base qui grossit avec l'usage, pas d'un
+  fine-tuning. Sans rapport avec l'ancienne fonctionnalité "Intervention"
+  (procédures statiques titre/étapes/durée, supprimée le 2026-07-19,
+  commit `ff22792`).
+- **Recherche sémantique** (`server/lib/embeddings.js`) : embeddings
+  `gemini-embedding-001` (même clé `GEMINI_API_KEY`), similarité cosinus
+  calculée **en mémoire côté app**, PAS d'Atlas Vector Search (demanderait
+  un tier Atlas M10+, pas nécessaire à l'échelle d'un coffre
+  mono-utilisateur). `Document.embedding`/`Repair.embedding` générés
+  best-effort après l'upload/le résumé (`processNewDocument`/
+  `processScanDocument` dans `services/documents.js`) et après
+  create/update d'un dépannage (`services/repairs.js`, via `waitUntil`) —
+  absent/vide = item pas encore traité, reste trouvable par mot-clé.
+  `search_documents`/`search_repair_cases` (Jarvis + MCP) combinent
+  toujours sémantique + mot-clé (recherche hybride, `mergeById` dans
+  `chat.js`/`mcp/index.js`) — jamais un remplacement de la recherche regex
+  existante. **Important** : `text-embedding-004` n'est plus servi par
+  cette clé API (404 confirmé) — seul `gemini-embedding-001`/`-2` supporte
+  `embedContent` aujourd'hui ; vérifier via `ai.models.list()` avant de
+  changer ce nom de modèle.
+- **Mémoire de conversation Jarvis côté serveur** (`server/models/
+  ChatMessage.js`, `server/services/chatHistory.js`) : un document par
+  message, remplace l'ancien stockage `localStorage` (source de vérité
+  serveur, partagée entre appareils). `POST /api/chat` n'accepte plus tout
+  l'historique du client, juste `{ text, documentId }` — le serveur charge/
+  persiste lui-même le fil. `GET`/`DELETE /api/chat/history` pour le
+  chargement initial et le bouton "Effacer la conversation" du panneau.
 
 ## Règles de sécurité (à ne jamais casser)
 
@@ -57,7 +92,7 @@ authentification.** Jamais de secret dans ce fichier ni dans le repo.
 
 ## Serveur MCP (`server/mcp/index.js`)
 
-Streamable HTTP stateless (un serveur par POST). Dix tools :
+Streamable HTTP stateless (un serveur par POST). Douze tools :
 - `list_documents` (filtre `folder` par nom), `search_documents`,
   `get_document_content` (texte des PDF extrait via pdf-parse v2, classe `PDFParse`)
 - `add_document` : base64 ≤ **3 Mo** décodés (transite par la fonction,
@@ -86,6 +121,12 @@ Streamable HTTP stateless (un serveur par POST). Dix tools :
   entière. Pas de `confirmed` requis (additif/correctif, jamais destructeur)
   — à n'utiliser qu'après avoir lu un document donnant l'info de façon
   fiable, jamais une valeur inventée.
+- `search_repair_cases`, `add_repair_case` : historique de dépannage
+  (`server/services/repairs.js`, `Repair`). `add_repair_case` est additif
+  (pas de `confirmed` requis côté schéma), mais sa description impose de
+  n'être appelé qu'après un accord explicite de l'utilisateur dans la
+  conversation — contrainte de comportement, pas technique (rien
+  n'empêcherait Claude de l'appeler directement).
 
 Convention métadonnées : catégories/tags/dossiers en minuscules, style
 « carrier xarios 200 » / « schema electrique » (capitalisation en CSS).
@@ -93,11 +134,13 @@ Convention métadonnées : catégories/tags/dossiers en minuscules, style
 L'assistant web (`server/routes/chat.js`, bouton IA de l'appli) peut lui
 aussi écrire, avec les mêmes outils logiques que le MCP : `update_document`
 (déplacer vers un dossier via `resolveFolderLabel`, modifier nom/catégorie/
-tags/description) et `update_model_specs` (même logique de fusion). Il ne
-peut en revanche jamais supprimer un document ou un dossier — pas
-d'équivalent de `delete_document`/`delete_folder` côté chat, contrainte
-uniquement portée par l'absence du tool (rien dans le schéma ne l'en
-empêcherait techniquement si le tool existait).
+tags/description), `update_model_specs` (même logique de fusion) et
+`log_repair_case` (historique de dépannage, même contrainte d'accord
+explicite que côté MCP). Il ne peut en revanche jamais supprimer un
+document ou un dossier — pas d'équivalent de `delete_document`/
+`delete_folder` côté chat, contrainte uniquement portée par l'absence du
+tool (rien dans le schéma ne l'en empêcherait techniquement si le tool
+existait).
 
 ## Commandes
 
