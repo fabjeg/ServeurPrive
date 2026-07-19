@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api.js";
 import { DocumentGrid } from "./DocumentGrid.jsx";
-import { InterventionForm } from "./InterventionForm.jsx";
+import { FolderCard } from "./FolderGrid.jsx";
 import { FolderForm } from "./FolderForm.jsx";
 import { useBackClose } from "../hooks/useBackClose.js";
-import { categoryIcon, IconChevron, IconClock, IconWrench } from "./Icons.jsx";
+import { categoryIcon, IconChevron } from "./Icons.jsx";
 
 function StatTile({ icon: Icon, label, value }) {
   return (
@@ -18,78 +18,66 @@ function StatTile({ icon: Icon, label, value }) {
   );
 }
 
-function InterventionRow({ intervention, onEdit, onDelete }) {
-  const [open, setOpen] = useState(false);
-  const hasDetails = intervention.steps.length > 0;
+// Groupe les modèles d'une marque par catégorie de véhicule (stockée dans
+// la description du dossier modèle) — les modèles sans description
+// tombent dans un groupe "Autres" affiché en dernier.
+function groupByCategory(childFolders) {
+  const groups = new Map();
+  for (const f of childFolders) {
+    const key = f.description || "Autres";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(f);
+  }
+  const entries = [...groups.entries()];
+  entries.sort((a, b) => (a[0] === "Autres" ? 1 : b[0] === "Autres" ? -1 : a[0].localeCompare(b[0])));
+  return entries;
+}
 
+function VehicleCategoryGroup({ category, models, open, onToggle, onOpenChild }) {
   return (
-    <li className="intervention">
+    <li className="vehicle-group">
       <button
-        className="intervention__main"
-        onClick={() => hasDetails && setOpen((o) => !o)}
-        aria-expanded={hasDetails ? open : undefined}
+        type="button"
+        className="vehicle-group__head"
+        onClick={onToggle}
+        aria-expanded={open}
       >
-        <span className="intervention__icon">
-          <IconWrench />
+        <span className="vehicle-group__title">{category}</span>
+        <span className="vehicle-group__count">
+          {models.length} modèle{models.length > 1 ? "s" : ""}
         </span>
-        <span className="intervention__body">
-          <span className="intervention__title">{intervention.title}</span>
-          <span className="intervention__note">
-            {[
-              intervention.note,
-              intervention.steps.length
-                ? `${intervention.steps.length} étape${intervention.steps.length > 1 ? "s" : ""}`
-                : "",
-            ]
-              .filter(Boolean)
-              .join(" • ") || "Procédure"}
-          </span>
+        <span className={`vehicle-group__chevron ${open ? "is-open" : ""}`}>
+          <IconChevron />
         </span>
-        {intervention.durationMinutes > 0 && (
-          <span className="intervention__duration">
-            <IconClock /> {intervention.durationMinutes} min
-          </span>
-        )}
-        {hasDetails && (
-          <span className={`intervention__chevron ${open ? "is-open" : ""}`}>
-            <IconChevron />
-          </span>
-        )}
       </button>
       {open && (
-        <div className="intervention__details">
-          <ol className="intervention__steps">
-            {intervention.steps.map((s, i) => (
-              <li key={i}>{s}</li>
-            ))}
-          </ol>
-          <div className="intervention__actions">
-            <button className="btn" onClick={() => onEdit(intervention)}>
-              Modifier
-            </button>
-            <button className="btn btn--danger" onClick={() => onDelete(intervention)}>
-              Supprimer
-            </button>
-          </div>
-        </div>
-      )}
-      {!hasDetails && (
-        <div className="intervention__quick-actions">
-          <button className="intervention__edit" onClick={() => onEdit(intervention)}>
-            Modifier
-          </button>
-        </div>
+        <ul className="folder-grid vehicle-group__models">
+          {models.map((f) => (
+            <FolderCard key={f.id} folder={f} onOpen={onOpenChild} />
+          ))}
+        </ul>
       )}
     </li>
   );
 }
 
-export function FolderPage({ space, folderId, version, onBack, onOpenDoc, onDeleteDoc, onAddPdf, onChanged }) {
+export function FolderPage({
+  space,
+  folderId,
+  version,
+  onBack,
+  onOpenDoc,
+  onDeleteDoc,
+  onAddPdf,
+  onOpenChild,
+  onChanged,
+}) {
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState("");
-  const [interventionForm, setInterventionForm] = useState(null); // null | {} | { intervention }
   const [editingFolder, setEditingFolder] = useState(false);
+  const [creatingChild, setCreatingChild] = useState(false);
   const [descOpen, setDescOpen] = useState(false);
+  const [openCategories, setOpenCategories] = useState(() => new Set());
 
   useBackClose(onBack);
 
@@ -103,23 +91,19 @@ export function FolderPage({ space, folderId, version, onBack, onOpenDoc, onDele
   useEffect(load, [load, version]);
 
   const handleDeleteFolder = async () => {
-    const { folder, stats } = detail;
+    const { folder, childFolders, stats } = detail;
     const warning =
       `Supprimer le dossier « ${folder.name} » ?\n` +
-      (stats.documentCount
-        ? `Les ${stats.documentCount} document(s) seront conservés (non classés), `
+      (childFolders.length
+        ? `Ses ${childFolders.length} modèle(s) seront aussi supprimés. `
         : "") +
-      "ses interventions seront supprimées.";
+      (stats.documentCount || childFolders.length
+        ? "Les documents seront conservés (non classés)."
+        : "");
     if (!window.confirm(warning)) return;
     await api.deleteFolder(space, folder.id);
     onChanged();
     onBack();
-  };
-
-  const handleDeleteIntervention = async (intervention) => {
-    if (!window.confirm(`Supprimer l'intervention « ${intervention.title} » ?`)) return;
-    await api.deleteIntervention(folderId, intervention.id);
-    onChanged();
   };
 
   if (error) {
@@ -135,7 +119,8 @@ export function FolderPage({ space, folderId, version, onBack, onOpenDoc, onDele
   }
   if (!detail) return <p className="grid-empty">Ouverture du dossier…</p>;
 
-  const { folder, documents, interventions, stats } = detail;
+  const { folder, childFolders, documents, stats } = detail;
+  const isBrand = !folder.parentId;
 
   return (
     <section className="folder-page">
@@ -168,6 +153,11 @@ export function FolderPage({ space, folderId, version, onBack, onOpenDoc, onDele
           <button className="btn btn--primary" onClick={() => onAddPdf(folder)}>
             + Ajouter un document
           </button>
+          {isBrand && (
+            <button className="btn" onClick={() => setCreatingChild(true)}>
+              + Nouveau modèle
+            </button>
+          )}
           <button className="btn" onClick={() => setEditingFolder(true)}>
             Modifier
           </button>
@@ -177,64 +167,63 @@ export function FolderPage({ space, folderId, version, onBack, onOpenDoc, onDele
         </div>
       </header>
 
-      {(stats.categories.length > 0 || stats.avgDurationMinutes) && (
+      {stats.categories.length > 0 && (
         <ul className="stat-grid">
           {stats.categories.slice(0, 3).map((c) => (
             <StatTile key={c.name} icon={categoryIcon(c.name)} label={c.name} value={c.count} />
           ))}
-          {stats.avgDurationMinutes && (
-            <StatTile icon={IconClock} label="Temps moy." value={`${stats.avgDurationMinutes} min`} />
-          )}
         </ul>
       )}
 
-      <section className="folder-page__section folder-page__section--interventions">
-        <div className="folder-page__section-head">
-          <h2 className="folder-page__section-title">
-            <IconWrench /> Interventions fréquentes
-          </h2>
-          <button className="btn" onClick={() => setInterventionForm({})}>
-            + Ajouter
-          </button>
-        </div>
-        {interventions.length ? (
-          <ul className="intervention-list">
-            {interventions.map((i) => (
-              <InterventionRow
-                key={i.id}
-                intervention={i}
-                onEdit={(intervention) => setInterventionForm({ intervention })}
-                onDelete={handleDeleteIntervention}
+      {isBrand && childFolders.length > 0 && (
+        <section className="folder-page__section">
+          <div className="folder-page__section-head">
+            <h2 className="folder-page__section-title">Modèles</h2>
+          </div>
+          <ul className="vehicle-group-list">
+            {groupByCategory(childFolders).map(([category, models]) => (
+              <VehicleCategoryGroup
+                key={category}
+                category={category}
+                models={models}
+                open={openCategories.has(category)}
+                onToggle={() =>
+                  setOpenCategories((prev) => {
+                    const next = new Set(prev);
+                    next.has(category) ? next.delete(category) : next.add(category);
+                    return next;
+                  })
+                }
+                onOpenChild={onOpenChild}
               />
             ))}
           </ul>
-        ) : (
-          <p className="folder-page__empty">
-            Aucune intervention notée — ajouter les procédures qui reviennent souvent sur ce modèle.
-          </p>
-        )}
-      </section>
+        </section>
+      )}
 
-      <section className="folder-page__section">
-        <div className="folder-page__section-head">
-          <h2 className="folder-page__section-title">Documents</h2>
-        </div>
-        <DocumentGrid
-          documents={documents}
-          loading={false}
-          onOpen={onOpenDoc}
-          onDelete={onDeleteDoc}
-        />
-      </section>
+      {(!isBrand || documents.length > 0) && (
+        <section className="folder-page__section">
+          <div className="folder-page__section-head">
+            <h2 className="folder-page__section-title">
+              {isBrand ? "Non classés (cette marque)" : "Documents"}
+            </h2>
+          </div>
+          <DocumentGrid
+            documents={documents}
+            loading={false}
+            onOpen={onOpenDoc}
+            onDelete={onDeleteDoc}
+          />
+        </section>
+      )}
 
-      {interventionForm && (
-        <InterventionForm
+      {creatingChild && (
+        <FolderForm
           space={space}
-          folderId={folder.id}
-          intervention={interventionForm.intervention}
-          onClose={() => setInterventionForm(null)}
+          parentId={folder.id}
+          onClose={() => setCreatingChild(false)}
           onSaved={() => {
-            setInterventionForm(null);
+            setCreatingChild(false);
             onChanged();
           }}
         />

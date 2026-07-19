@@ -5,53 +5,35 @@
 // Sur mobile, la barre MobileNav occupe le bas de l'écran : tout est décalé
 // au-dessus d'elle et le panneau prend toute la largeur.
 
+// Bouton discret : juste le logo, semi-transparent au repos, pleine
+// opacité au survol/appui pour rester repérable sans attirer l'œil.
 .chat-fab {
   @include focus-ring;
   position: fixed;
   right: 1.25rem;
   bottom: 1.25rem;
   z-index: 12; // au-dessus du viewer (overlay z 10) : le bot reste accessible sur un PDF
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.65rem 1.1rem 0.65rem 0.65rem;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
   border-radius: 999px;
   background: var(--accent);
   color: var(--accent-contrast);
   box-shadow: var(--shadow-2);
+  opacity: 0.55;
 
-  &:hover {
+  &:hover,
+  &:focus-visible,
+  &:active {
+    opacity: 1;
     background: var(--accent-hover);
   }
 
   &__icon {
     display: grid;
     place-items: center;
-    width: 1.9rem;
-    height: 1.9rem;
     font-size: 1.15rem;
-  }
-
-  &__label {
-    font-size: var(--fs-md);
-    font-weight: 600;
-  }
-
-  // Étincelle « propulsé par l'IA » — badge découpé sur l'angle du bouton,
-  // seul repère visuel volontairement ajouté au vocabulaire de l'app.
-  &__badge {
-    position: absolute;
-    top: -0.25rem;
-    right: -0.25rem;
-    display: grid;
-    place-items: center;
-    width: 1.15rem;
-    height: 1.15rem;
-    border-radius: 50%;
-    background: var(--surface);
-    color: var(--accent);
-    border: 2px solid var(--bg);
-    font-size: 0.65rem;
   }
 
   @media (max-width: 720px) {

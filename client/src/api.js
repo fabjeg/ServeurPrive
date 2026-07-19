@@ -46,8 +46,9 @@ export const api = {
   analyzeDocument: (space, id) =>
     request(`/api/documents/${id}/analyze`, { method: "POST", body: { space } }),
 
-  // Dossiers (référentiels par modèle de frigo, pro uniquement côté UI) et interventions.
-  listFolders: (space) => request(`/api/folders?${withSpace(space)}`),
+  // Dossiers (marque -> modèle, pro uniquement côté UI). Sans parentId,
+  // liste les marques (dossiers de premier niveau) uniquement.
+  listFolders: (space, { parentId } = {}) => request(`/api/folders?${withSpace(space, { parentId })}`),
   folderDetail: (space, id) => request(`/api/folders/${id}?${withSpace(space)}`),
   createFolder: (space, body) =>
     request("/api/folders", { method: "POST", body: { ...body, space } }),
@@ -55,12 +56,6 @@ export const api = {
     request(`/api/folders/${id}`, { method: "PATCH", body: { ...body, space } }),
   deleteFolder: (space, id) =>
     request(`/api/folders/${id}?${withSpace(space)}`, { method: "DELETE" }),
-  createIntervention: (space, folderId, body) =>
-    request(`/api/folders/${folderId}/interventions`, { method: "POST", body: { ...body, space } }),
-  updateIntervention: (folderId, id, body) =>
-    request(`/api/folders/${folderId}/interventions/${id}`, { method: "PATCH", body }),
-  deleteIntervention: (folderId, id) =>
-    request(`/api/folders/${folderId}/interventions/${id}`, { method: "DELETE" }),
 
   // URLs du proxy authentifié — jamais d'URL Blob directe.
   fileUrl: (space, id) => `/api/documents/${id}/file?${withSpace(space)}`,

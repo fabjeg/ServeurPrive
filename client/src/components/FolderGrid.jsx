@@ -1,6 +1,6 @@
-import { IconChevron, IconFolder, IconSnow, IconWrench } from "./Icons.jsx";
+import { IconChevron, IconFolder, IconSnow } from "./Icons.jsx";
 
-function FolderCard({ folder, onOpen }) {
+export function FolderCard({ folder, onOpen }) {
   return (
     <li>
       <button className="folder-card" onClick={() => onOpen(folder)}>
@@ -17,12 +17,6 @@ function FolderCard({ folder, onOpen }) {
           <span className="folder-card__desc">
             {folder.description || "Dossier de documents"}
           </span>
-          {folder.interventionCount > 0 && (
-            <span className="folder-card__meta">
-              <IconWrench /> {folder.interventionCount} intervention
-              {folder.interventionCount > 1 ? "s" : ""}
-            </span>
-          )}
         </span>
         <span className="folder-card__chevron">
           <IconChevron />
@@ -39,15 +33,15 @@ export function FolderGrid({ folders, unfiledCount, loading, onOpen, onOpenUnfil
   return (
     <section>
       <div className="folder-grid__head">
-        <h2 className="folder-grid__title">Dossiers</h2>
+        <h2 className="folder-grid__title">Marques</h2>
         <button className="btn" onClick={onCreate}>
-          + Nouveau dossier
+          + Nouvelle marque
         </button>
       </div>
       {!folders.length && !unfiledCount ? (
         <div className="grid-empty">
-          <p className="grid-empty__title">Aucun dossier</p>
-          <p>Créer un dossier par modèle (ex. « carrier xarios 200 ») pour y ranger ses docs.</p>
+          <p className="grid-empty__title">Aucune marque</p>
+          <p>Créer une marque (ex. « carrier ») pour y ranger ses modèles.</p>
         </div>
       ) : (
         <ul className="folder-grid">

@@ -24,7 +24,7 @@ const MAX_HISTORY_MESSAGES = 30;
 const SYSTEM_PROMPT = `Tu es l'assistant du coffre documentaire « Frigo » d'un technicien frigoriste.
 Le coffre contient des documents professionnels (notices PDF, schémas électriques, plans, photos)
 classés dans des dossiers — un dossier correspond à un modèle de frigo/groupe froid (ex. « carrier xarios 200 »)
-et regroupe aussi des interventions (procédures avec étapes et durées).
+.
 
 Ton rôle :
 - retrouver les documents pertinents avec les outils de recherche, puis lire leur contenu pour répondre ;
@@ -71,13 +71,13 @@ const TOOLS = [
   {
     name: "list_folders",
     description:
-      "Liste les dossiers du coffre (un dossier = un modèle de frigo) avec le nombre de documents et d'interventions.",
+      "Liste les dossiers du coffre (un dossier = un modèle de frigo) avec le nombre de documents.",
     input_schema: { type: "object", properties: {} },
   },
   {
     name: "get_folder",
     description:
-      "Détail d'un dossier : ses documents, ses interventions (procédures, étapes, durées) et ses statistiques.",
+      "Détail d'un dossier : ses documents et ses statistiques.",
     input_schema: {
       type: "object",
       properties: {
@@ -131,7 +131,6 @@ async function runTool(ownerId, name, input) {
           name: f.name,
           description: f.description || undefined,
           documentCount: f.documentCount,
-          interventionCount: f.interventionCount,
         })),
         unfiledCount,
       };
@@ -142,7 +141,6 @@ async function runTool(ownerId, name, input) {
       return {
         folder: detail.folder,
         documents: detail.documents.map(docSummary),
-        interventions: detail.interventions,
         stats: detail.stats,
       };
     }

@@ -41,7 +41,7 @@ authentification.** Jamais de secret dans ce fichier ni dans le repo.
 
 ## Serveur MCP (`server/mcp/index.js`)
 
-Streamable HTTP stateless (un serveur par POST). Douze tools :
+Streamable HTTP stateless (un serveur par POST). Neuf tools :
 - `list_documents` (filtre `folder` par nom), `search_documents`,
   `get_document_content` (texte des PDF extrait via pdf-parse v2, classe `PDFParse`)
 - `add_document` : base64 ≤ **3 Mo** décodés (transite par la fonction,
@@ -51,14 +51,18 @@ Streamable HTTP stateless (un serveur par POST). Douze tools :
 - `update_document` : métadonnées seulement (le blob n'est jamais déplacé,
   le nom affiché vient de `filename` via Content-Disposition du proxy) ;
   `folder: ""` détache du dossier
-- `list_folders`, `get_folder` : dossiers = référentiels par modèle de frigo
-  (documents, interventions fréquentes, temps moyen)
-- `add_intervention`, `update_intervention` : procédures d'un dossier (titre,
-  note, durée, étapes — les étapes fournies remplacent les anciennes)
-- `delete_document`, `delete_intervention`, `delete_folder` : exigent
-  `confirmed: true` et une confirmation explicite de l'utilisateur dans la
-  conversation — jamais à l'initiative de l'IA. `delete_folder` conserve les
-  documents (détachés, non classés) mais supprime les interventions.
+- `list_folders`, `get_folder` : dossiers = hiérarchie 2 niveaux, marque
+  (ex. « carrier », parentId null) → modèle (ex. « xarios 200 », parentId =
+  id de la marque) ; une marque peut aussi porter des documents directement
+  rattachés (équivalent d'un « non classé » scopé à cette marque).
+  `add_document`/`update_document` résolvent un libellé plat façon
+  « carrier xarios 600 » par préfixe de marque existante (voir
+  `resolveFolderLabel` dans `server/mcp/index.js`) — pas de nouveau
+  paramètre côté schéma MCP.
+- `delete_document`, `delete_folder` : exigent `confirmed: true` et une
+  confirmation explicite de l'utilisateur dans la conversation — jamais à
+  l'initiative de l'IA. `delete_folder` conserve les documents (détachés,
+  non classés) et supprime aussi les modèles enfants d'une marque.
 
 Convention métadonnées : catégories/tags/dossiers en minuscules, style
 « carrier xarios 200 » / « schema electrique » (capitalisation en CSS).
@@ -69,7 +73,7 @@ Convention métadonnées : catégories/tags/dossiers en minuscules, style
 npm install && npm --prefix client install   # depuis la racine UNIQUEMENT
 node --env-file=.env server/local.js         # API locale :3000
 npm run dev:client                           # Vite :5173 (proxy /api)
-node --env-file=.env scripts/test-mcp-write.mjs [baseUrl]  # e2e MCP (26 checks)
+node --env-file=.env scripts/test-mcp-write.mjs [baseUrl]  # e2e MCP (23 checks)
 vercel --prod --yes                          # déploiement production
 ```
 
@@ -92,3 +96,17 @@ Après un déploiement, relancer les tests e2e contre
   localhost : le client confirme chaque upload via `POST /api/documents`
   (upsert par `blobPath` déduplique en prod).
 - `/tmp` sous Windows résout vers `C:\tmp` — utiliser le scratchpad.
+- **Profondeur des dossiers plafonnée à 1** (marque → modèle) : imposée
+  uniquement dans `server/services/folders.js` (`assertValidParent`), pas
+  dans le schéma Mongoose — toute nouvelle fonction qui crée/modifie un
+  dossier doit passer par ce garde-fou, sinon rien n'empêche une profondeur
+  illimitée en base.
+- **Résolution MCP par préfixe de marque** (`add_document`/`update_document`,
+  libellé `folder` façon « carrier xarios 600 ») : si le libellé ne
+  correspond à aucune marque existante par préfixe exact, le comportement de
+  repli crée un dossier plat de premier niveau (comme avant la hiérarchie) —
+  ne fonctionne donc pas pour une toute nouvelle marque qui n'a pas encore
+  été créée via l'interface web. Limite acceptée. Idem, `findFolderByName`
+  cherche maintenant sur tous les niveaux : deux modèles homonymes sous deux
+  marques différentes sont ambigus par nom (app mono-utilisateur, limite
+  acceptée).

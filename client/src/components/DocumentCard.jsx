@@ -1,5 +1,5 @@
 import { api } from "../api.js";
-import { IconAlert, IconDoc, IconImage } from "./Icons.jsx";
+import { IconAlert, IconDoc, IconImage, IconSparkle } from "./Icons.jsx";
 
 export function formatSize(bytes) {
   if (!bytes) return "— Ko";
@@ -25,8 +25,9 @@ function kindIcon(mimetype) {
   return IconAlert;
 }
 
-// Tuile document : pastille d'icône, nom, métadonnées en tampon mono,
-// actions sur la tranche droite.
+// Tuile document : pastille d'icône, nom, résumé IA mis en avant (ce que
+// l'analyse détecte du document), métadonnées réduites au strict minimum en
+// pied de carte, actions sur la tranche droite.
 export function DocumentCard({ doc, onOpen, onDelete }) {
   const Kind = kindIcon(doc.mimetype);
 
@@ -38,16 +39,15 @@ export function DocumentCard({ doc, onOpen, onDelete }) {
         </span>
         <span className="doc-card__text">
           <span className="doc-card__name">{doc.filename}</span>
+          {doc.summary && (
+            <span className="doc-card__summary">
+              <IconSparkle />
+              {doc.summary}
+            </span>
+          )}
           <span className="doc-card__stamp">
-            {kindLabel(doc.mimetype)} · {formatDate(doc.uploadedAt)} · {formatSize(doc.size)}
-          </span>
-          <span className="doc-card__meta">
             <span className="doc-card__category">{doc.category}</span>
-            {doc.tags.map((t) => (
-              <span key={t} className="doc-card__tag">
-                #{t}
-              </span>
-            ))}
+            {formatDate(doc.uploadedAt)} · {formatSize(doc.size)}
           </span>
         </span>
       </button>

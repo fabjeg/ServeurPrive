@@ -15,15 +15,11 @@ import {
 } from "../services/documents.js";
 import { extractContent } from "../services/extractContent.js";
 import {
-  createIntervention,
   deleteFolder,
-  deleteIntervention,
   findFolderByName,
   getFolderDetail,
-  getIntervention,
   getOrCreateFolder,
   listFolders,
-  updateIntervention,
 } from "../services/folders.js";
 
 // Le connecteur MCP ne voit JAMAIS l'espace personnel — cette constante est
@@ -68,11 +64,28 @@ function textResult(text) {
   return { content: [{ type: "text", text }] };
 }
 
-function interventionLine(i) {
-  const duration = i.durationMinutes ? `${i.durationMinutes} min` : "durée non renseignée";
-  return `- [${i._id}] ${i.title} — ${duration}${
-    i.steps.length ? `, ${i.steps.length} étape(s)` : ""
-  }${i.note ? ` (${i.note})` : ""}`;
+// Résolution marque/modèle à partir d'un libellé plat façon MCP, ex.
+// « carrier xarios 600 » : si le libellé commence par le nom d'une marque
+// existante (dossier de premier niveau) suivi d'un espace, le reste devient
+// un modèle enfant de cette marque (créé au besoin) ; si le libellé est
+// EXACTEMENT le nom d'une marque, le document est rattaché directement à la
+// marque (pas d'enfant) ; sinon, comportement historique : dossier de
+// premier niveau plat, créé au besoin (limite acceptée : une toute nouvelle
+// marque pas encore créée via l'UI atterrit ainsi en dossier plat).
+async function resolveFolderLabel(ownerId, space, label) {
+  const normalized = String(label).trim().toLowerCase();
+  const { folders: brands } = await listFolders(ownerId, space);
+  for (const brand of brands) {
+    if (normalized === brand.name) {
+      return getOrCreateFolder(ownerId, space, brand.name);
+    }
+    const prefix = `${brand.name} `;
+    if (normalized.startsWith(prefix)) {
+      const modelName = normalized.slice(prefix.length).trim();
+      if (modelName) return getOrCreateFolder(ownerId, space, modelName, brand.id);
+    }
+  }
+  return getOrCreateFolder(ownerId, space, normalized);
 }
 
 function buildServer() {
@@ -262,7 +275,7 @@ function buildServer() {
       // Le nom sert de base au chemin blob : on neutralise les séparateurs
       // pour rester sous documents/<owner>/ (même règle que l'upload web).
       const safeName = filename.replace(/[/\\]/g, "_");
-      const folderDoc = folder ? await getOrCreateFolder(OWNER_ID, SPACE, folder) : null;
+      const folderDoc = folder ? await resolveFolderLabel(OWNER_ID, SPACE, folder) : null;
       const doc = await createDocumentFromBuffer(OWNER_ID, {
         filename: safeName,
         mimetype,
@@ -330,7 +343,7 @@ function buildServer() {
 
       let folderId;
       if (folder !== undefined) {
-        folderId = folder.trim() ? (await getOrCreateFolder(OWNER_ID, SPACE, folder))._id : null;
+        folderId = folder.trim() ? (await resolveFolderLabel(OWNER_ID, SPACE, folder))._id : null;
       }
       const doc = await updateDocument(OWNER_ID, id, SPACE, {
         filename: filename?.replace(/[/\\]/g, "_"),
@@ -382,22 +395,30 @@ function buildServer() {
     {
       title: "Lister les dossiers",
       description:
-        "Liste les dossiers (référentiels par modèle de frigo, ex. « carrier xarios 200 ») " +
-        "avec leurs compteurs de documents et d'interventions.",
+        "Liste les marques (dossiers de premier niveau, ex. « carrier ») avec leurs modèles " +
+        "(ex. « xarios 200 ») et leurs compteurs de documents.",
       inputSchema: {},
     },
     async () => {
-      const { folders, unfiledCount } = await listFolders(OWNER_ID, SPACE);
-      if (!folders.length && !unfiledCount) {
+      const { folders: brands, unfiledCount } = await listFolders(OWNER_ID, SPACE);
+      if (!brands.length && !unfiledCount) {
         return textResult("Aucun dossier pour l'instant.");
       }
-      const lines = folders.map(
-        (f) =>
-          `- ${f.name} — ${f.documentCount} document(s), ${f.interventionCount} intervention(s)` +
-          (f.description ? ` : ${f.description}` : "")
-      );
+      const lines = [];
+      for (const brand of brands) {
+        const { folders: models } = await listFolders(OWNER_ID, SPACE, { parentId: brand.id });
+        lines.push(
+          `- ${brand.name} — ${brand.documentCount} document(s) directs` +
+            (brand.description ? ` : ${brand.description}` : "")
+        );
+        for (const m of models) {
+          lines.push(
+            `  - ${m.name} — ${m.documentCount} document(s)` + (m.description ? ` : ${m.description}` : "")
+          );
+        }
+      }
       if (unfiledCount) lines.push(`- (hors dossier) — ${unfiledCount} document(s) non classé(s)`);
-      return textResult(`${folders.length} dossier(s) :\n${lines.join("\n")}`);
+      return textResult(`${brands.length} marque(s) :\n${lines.join("\n")}`);
     }
   );
 
@@ -406,45 +427,37 @@ function buildServer() {
     {
       title: "Détail d'un dossier",
       description:
-        "Retourne le contenu complet d'un dossier : documents, répartition par catégorie, " +
-        "interventions fréquentes (avec identifiants) et durée moyenne.",
+        "Retourne le contenu complet d'un dossier : ses modèles enfants (si c'est une marque), " +
+        "ses documents directs et leur répartition par catégorie.",
       inputSchema: {
-        name: z.string().min(1).describe("Nom exact du dossier (voir list_folders)"),
+        name: z.string().min(1).describe("Nom exact du dossier, marque ou modèle (voir list_folders)"),
       },
     },
     async ({ name }) => {
       const folder = await findFolderByName(OWNER_ID, SPACE, name);
       if (!folder) return textResult(`Dossier « ${name} » introuvable (voir list_folders).`);
       const detail = await getFolderDetail(OWNER_ID, folder._id.toString(), SPACE);
-      const { documents, interventions, stats } = detail;
+      const { documents, stats, childFolders } = detail;
       const parts = [
         `Dossier : ${detail.folder.name}` +
           (detail.folder.description ? `\nDescription : ${detail.folder.description}` : ""),
-        `Documents (${stats.documentCount}) : ${
-          stats.categories.map((c) => `${c.name} ${c.count}`).join(", ") || "aucun"
-        }`,
       ];
+      if (childFolders.length) {
+        parts.push(
+          `Modèles (${childFolders.length}) :\n${childFolders
+            .map((c) => `- ${c.name} — ${c.documentCount} document(s)`)
+            .join("\n")}`
+        );
+      }
+      parts.push(
+        `Documents directs (${stats.documentCount}) : ${
+          stats.categories.map((c) => `${c.name} ${c.count}`).join(", ") || "aucun"
+        }`
+      );
       if (documents.length) {
         parts.push(
           documents
             .map((d) => `- [${d.id}] ${d.filename} — ${d.category}`)
-            .join("\n")
-        );
-      }
-      parts.push(
-        `Interventions (${interventions.length})${
-          stats.avgDurationMinutes ? `, temps moyen ${stats.avgDurationMinutes} min` : ""
-        } :`
-      );
-      if (interventions.length) {
-        parts.push(
-          interventions
-            .map(
-              (i) =>
-                `- [${i.id}] ${i.title} — ${i.durationMinutes || "?"} min` +
-                (i.note ? ` (${i.note})` : "") +
-                (i.steps.length ? `\n  Étapes : ${i.steps.join(" → ")}` : "")
-            )
             .join("\n")
         );
       }
@@ -453,118 +466,14 @@ function buildServer() {
   );
 
   server.registerTool(
-    "add_intervention",
-    {
-      title: "Ajouter une intervention",
-      description:
-        "Ajoute une intervention fréquente (procédure courte) à un dossier de modèle de frigo. " +
-        "Le dossier est créé s'il n'existe pas.",
-      inputSchema: {
-        folder: z.string().min(1).max(80).describe("Nom du dossier (ex. « carrier xarios 200 »)"),
-        title: z.string().min(1).max(120).describe("Titre (ex. « remplacement sonde évaporateur »)"),
-        note: z.string().max(200).optional().describe("Note courte affichée sous le titre"),
-        duration_minutes: z.number().int().min(0).max(6000).optional().describe("Durée estimée"),
-        steps: z
-          .array(z.string().min(1).max(300))
-          .max(40)
-          .optional()
-          .describe("Étapes ordonnées de la procédure"),
-      },
-    },
-    async ({ folder, title, note, duration_minutes, steps }) => {
-      const folderDoc = await getOrCreateFolder(OWNER_ID, SPACE, folder);
-      const intervention = await createIntervention(OWNER_ID, folderDoc._id.toString(), SPACE, {
-        title,
-        note,
-        durationMinutes: duration_minutes,
-        steps,
-      });
-      return textResult(
-        `Intervention ajoutée au dossier « ${folderDoc.name} » :\n${interventionLine(intervention)}`
-      );
-    }
-  );
-
-  server.registerTool(
-    "update_intervention",
-    {
-      title: "Modifier une intervention",
-      description:
-        "Met à jour une intervention existante (titre, note, durée, étapes). " +
-        "Les étapes fournies remplacent intégralement les anciennes.",
-      inputSchema: {
-        id: z.string().describe("Identifiant de l'intervention (obtenu via get_folder)"),
-        title: z.string().min(1).max(120).optional().describe("Nouveau titre"),
-        note: z.string().max(200).optional().describe("Nouvelle note"),
-        duration_minutes: z.number().int().min(0).max(6000).optional().describe("Nouvelle durée"),
-        steps: z
-          .array(z.string().min(1).max(300))
-          .max(40)
-          .optional()
-          .describe("Nouvelles étapes (remplacent les anciennes)"),
-      },
-    },
-    async ({ id, title, note, duration_minutes, steps }) => {
-      if (
-        title === undefined &&
-        note === undefined &&
-        duration_minutes === undefined &&
-        steps === undefined
-      ) {
-        return textResult(
-          "Aucun changement demandé : fournir title, note, duration_minutes et/ou steps."
-        );
-      }
-      const intervention = await updateIntervention(OWNER_ID, id, {
-        title,
-        note,
-        durationMinutes: duration_minutes,
-        steps,
-      });
-      if (!intervention) return textResult(`Intervention ${id} introuvable.`);
-      return textResult(`Intervention mise à jour :\n${interventionLine(intervention)}`);
-    }
-  );
-
-  server.registerTool(
-    "delete_intervention",
-    {
-      title: "Supprimer une intervention",
-      description:
-        "Supprime définitivement une intervention. Ne JAMAIS l'appeler de ta propre initiative — " +
-        "uniquement après confirmation explicite de l'utilisateur dans la conversation.",
-      inputSchema: {
-        id: z.string().describe("Identifiant de l'intervention (obtenu via get_folder)"),
-        confirmed: z
-          .boolean()
-          .describe(
-            "Doit être true, et seulement si l'utilisateur a explicitement confirmé la suppression"
-          ),
-      },
-    },
-    async ({ id, confirmed }) => {
-      if (confirmed !== true) {
-        return textResult(
-          "Suppression refusée : demande d'abord une confirmation explicite à l'utilisateur, " +
-            "puis rappelle ce tool avec confirmed: true."
-        );
-      }
-      const intervention = await getIntervention(OWNER_ID, id);
-      if (!intervention) return textResult(`Intervention ${id} introuvable.`);
-      const title = intervention.title;
-      await deleteIntervention(OWNER_ID, id);
-      return textResult(`Intervention « ${title} » supprimée définitivement.`);
-    }
-  );
-
-  server.registerTool(
     "delete_folder",
     {
       title: "Supprimer un dossier",
       description:
-        "Supprime un dossier et ses interventions ; les documents qu'il contenait sont " +
-        "conservés (non classés). Ne JAMAIS l'appeler de ta propre initiative — uniquement " +
-        "après confirmation explicite de l'utilisateur dans la conversation.",
+        "Supprime un dossier ; si c'est une marque avec des modèles enfants, ces modèles sont " +
+        "supprimés aussi (jamais les documents, toujours conservés non classés). Ne JAMAIS " +
+        "l'appeler de ta propre initiative — uniquement après confirmation explicite de " +
+        "l'utilisateur dans la conversation.",
       inputSchema: {
         name: z.string().min(1).describe("Nom exact du dossier (voir list_folders)"),
         confirmed: z
@@ -584,9 +493,7 @@ function buildServer() {
       const folder = await findFolderByName(OWNER_ID, SPACE, name);
       if (!folder) return textResult(`Dossier « ${name} » introuvable.`);
       await deleteFolder(OWNER_ID, folder._id.toString(), SPACE);
-      return textResult(
-        `Dossier « ${folder.name} » supprimé (interventions supprimées, documents conservés non classés).`
-      );
+      return textResult(`Dossier « ${folder.name} » supprimé (documents conservés non classés).`);
     }
   );
 

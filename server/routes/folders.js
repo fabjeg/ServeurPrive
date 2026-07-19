@@ -1,4 +1,4 @@
-// Routes dossiers (modèles de frigo) + interventions — toutes derrière requireAuth.
+// Routes dossiers (modèles de frigo) — toutes derrière requireAuth.
 // `space` obligatoire sur chaque route (query en lecture, body en écriture),
 // même garantie de cloisonnement que routes/documents.js. Les dossiers sont
 // un concept pro-only côté UI, mais la route reste générique.
@@ -6,13 +6,10 @@ import { Router } from "express";
 import { requireAuth } from "../lib/auth.js";
 import {
   createFolder,
-  createIntervention,
   deleteFolder,
-  deleteIntervention,
   getFolderDetail,
   listFolders,
   updateFolder,
-  updateIntervention,
 } from "../services/folders.js";
 
 export const foldersRouter = Router();
@@ -24,11 +21,19 @@ function parseSpace(value) {
 
 const SPACE_ERROR = { error: "Paramètre space requis (pro ou perso)." };
 
+function parseParentId(value) {
+  if (value === undefined || value === "") return { ok: true, parentId: null };
+  if (!/^[0-9a-fA-F]{24}$/.test(value)) return { ok: false };
+  return { ok: true, parentId: value };
+}
+
 foldersRouter.get("/", async (req, res, next) => {
   try {
     const space = parseSpace(req.query.space);
     if (!space) return res.status(400).json(SPACE_ERROR);
-    const result = await listFolders(req.ownerId, space);
+    const parsed = parseParentId(req.query.parentId);
+    if (!parsed.ok) return res.status(400).json({ error: "parentId invalide." });
+    const result = await listFolders(req.ownerId, space, { parentId: parsed.parentId });
     res.setHeader("Cache-Control", "private, no-store");
     res.json(result);
   } catch (err) {
@@ -40,15 +45,18 @@ foldersRouter.post("/", async (req, res, next) => {
   try {
     const space = parseSpace(req.body?.space);
     if (!space) return res.status(400).json(SPACE_ERROR);
-    const { name, description } = req.body || {};
+    const { name, description, parentId } = req.body || {};
     if (!name || !String(name).trim()) {
       return res.status(400).json({ error: "Nom de dossier requis." });
     }
-    const folder = await createFolder(req.ownerId, space, { name, description });
+    const folder = await createFolder(req.ownerId, space, { name, description, parentId });
     res.status(201).json({ folder: folder.toClient() });
   } catch (err) {
     if (err.code === 11000) {
-      return res.status(409).json({ error: "Un dossier porte déjà ce nom." });
+      return res.status(409).json({ error: "Un dossier porte déjà ce nom à ce niveau." });
+    }
+    if (err.message?.includes("parent")) {
+      return res.status(400).json({ error: err.message });
     }
     next(err);
   }
@@ -71,72 +79,32 @@ foldersRouter.patch("/:id", async (req, res, next) => {
   try {
     const space = parseSpace(req.body?.space);
     if (!space) return res.status(400).json(SPACE_ERROR);
-    const { name, description } = req.body || {};
-    const folder = await updateFolder(req.ownerId, req.params.id, space, { name, description });
+    const { name, description, parentId } = req.body || {};
+    const folder = await updateFolder(req.ownerId, req.params.id, space, {
+      name,
+      description,
+      parentId,
+    });
     if (!folder) return res.status(404).json({ error: "Dossier introuvable." });
     res.json({ folder: folder.toClient() });
   } catch (err) {
     if (err.code === 11000) {
-      return res.status(409).json({ error: "Un dossier porte déjà ce nom." });
+      return res.status(409).json({ error: "Un dossier porte déjà ce nom à ce niveau." });
+    }
+    if (err.message?.includes("parent")) {
+      return res.status(400).json({ error: err.message });
     }
     next(err);
   }
 });
 
-// Supprime le dossier et ses interventions ; les documents sont détachés.
+// Supprime le dossier (et ses modèles enfants le cas échéant) ; les documents sont détachés.
 foldersRouter.delete("/:id", async (req, res, next) => {
   try {
     const space = parseSpace(req.query.space);
     if (!space) return res.status(400).json(SPACE_ERROR);
     const deleted = await deleteFolder(req.ownerId, req.params.id, space);
     if (!deleted) return res.status(404).json({ error: "Dossier introuvable." });
-    res.json({ ok: true });
-  } catch (err) {
-    next(err);
-  }
-});
-
-foldersRouter.post("/:id/interventions", async (req, res, next) => {
-  try {
-    const space = parseSpace(req.body?.space);
-    if (!space) return res.status(400).json(SPACE_ERROR);
-    const { title, note, durationMinutes, steps } = req.body || {};
-    if (!title || !String(title).trim()) {
-      return res.status(400).json({ error: "Titre d'intervention requis." });
-    }
-    const intervention = await createIntervention(req.ownerId, req.params.id, space, {
-      title,
-      note,
-      durationMinutes,
-      steps,
-    });
-    if (!intervention) return res.status(404).json({ error: "Dossier introuvable." });
-    res.status(201).json({ intervention: intervention.toClient() });
-  } catch (err) {
-    next(err);
-  }
-});
-
-foldersRouter.patch("/:id/interventions/:iid", async (req, res, next) => {
-  try {
-    const { title, note, durationMinutes, steps } = req.body || {};
-    const intervention = await updateIntervention(req.ownerId, req.params.iid, {
-      title,
-      note,
-      durationMinutes,
-      steps,
-    });
-    if (!intervention) return res.status(404).json({ error: "Intervention introuvable." });
-    res.json({ intervention: intervention.toClient() });
-  } catch (err) {
-    next(err);
-  }
-});
-
-foldersRouter.delete("/:id/interventions/:iid", async (req, res, next) => {
-  try {
-    const deleted = await deleteIntervention(req.ownerId, req.params.iid);
-    if (!deleted) return res.status(404).json({ error: "Intervention introuvable." });
     res.json({ ok: true });
   } catch (err) {
     next(err);

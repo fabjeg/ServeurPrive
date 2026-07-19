@@ -37,12 +37,20 @@ const PERSO_CATEGORIES = [
   { value: "autre", label: "Autre" },
 ];
 
-export function UploadPanel({ space, folders = [], initialFolderId, onClose, onUploaded }) {
+export function UploadPanel({
+  space,
+  folders = [],
+  initialFolderId,
+  initialFolderName,
+  onClose,
+  onUploaded,
+}) {
   const isPerso = space === "perso";
   const [files, setFiles] = useState([]);
   const [scanPages, setScanPages] = useState([]);
   const [reviewFile, setReviewFile] = useState(null);
   const [folderId, setFolderId] = useState(initialFolderId || "");
+  const [folderName, setFolderName] = useState(initialFolderName || null); // nom du dossier sélectionné (marque ou modèle)
   const [browsingFolders, setBrowsingFolders] = useState(false);
   const [category, setCategory] = useState(isPerso ? PERSO_CATEGORIES[2].value : "");
   const [tags, setTags] = useState("");
@@ -58,7 +66,10 @@ export function UploadPanel({ space, folders = [], initialFolderId, onClose, onU
   const openCamera = () => cameraRef.current?.click();
 
   const hasContent = files.length > 0 || scanPages.length > 0;
-  const selectedFolder = folders.find((f) => f.id === folderId);
+  // `folders` (props) ne liste que les marques (premier niveau) — un modèle
+  // sélectionné via FolderBrowser n'y figure pas, d'où folderName (renvoyé
+  // par FolderBrowser.onSelect) comme source de vérité prioritaire.
+  const selectedFolderName = folderName || folders.find((f) => f.id === folderId)?.name;
 
   // Sélection d'un document existant dans l'explorateur : on le range dans
   // le dossier de destination courant (pas de nouvel upload).
@@ -219,11 +230,11 @@ export function UploadPanel({ space, folders = [], initialFolderId, onClose, onU
               className="folder-field"
               onClick={() => setBrowsingFolders(true)}
             >
-              <span className={`folder-field__icon ${selectedFolder ? "" : "folder-field__icon--unfiled"}`}>
-                {selectedFolder ? <IconSnow /> : <IconFolder />}
+              <span className={`folder-field__icon ${selectedFolderName ? "" : "folder-field__icon--unfiled"}`}>
+                {selectedFolderName ? <IconSnow /> : <IconFolder />}
               </span>
-              <span className={`folder-field__name ${selectedFolder ? "" : "folder-field__name--unfiled"}`}>
-                {selectedFolder ? selectedFolder.name : "Non classé"}
+              <span className={`folder-field__name ${selectedFolderName ? "" : "folder-field__name--unfiled"}`}>
+                {selectedFolderName || "Non classé"}
               </span>
               <span className="folder-field__action">Parcourir</span>
             </button>
@@ -342,7 +353,10 @@ export function UploadPanel({ space, folders = [], initialFolderId, onClose, onU
           space={space}
           folders={folders}
           selectedId={folderId}
-          onSelect={setFolderId}
+          onSelect={(id, name) => {
+            setFolderId(id);
+            setFolderName(id ? name : null);
+          }}
           onClose={() => setBrowsingFolders(false)}
           onPickDoc={pickExisting}
         />

@@ -39,19 +39,6 @@ export const IconAlert = (p) => (
   </Icon>
 );
 
-export const IconClock = (p) => (
-  <Icon {...p}>
-    <circle cx="12" cy="12" r="8.5" />
-    <path d="M12 7.5V12l3 2" />
-  </Icon>
-);
-
-export const IconWrench = (p) => (
-  <Icon {...p}>
-    <path d="M14.5 6.5a4 4 0 0 0-5.3 5L4 16.7a1.8 1.8 0 0 0 0 2.6l.7.7a1.8 1.8 0 0 0 2.6 0l5.2-5.2a4 4 0 0 0 5-5.3l-2.7 2.7-2.5-.7-.7-2.5z" />
-  </Icon>
-);
-
 export const IconChevron = (p) => (
   <Icon {...p}>
     <path d="M9 6l6 6-6 6" />

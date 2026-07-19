@@ -60,7 +60,13 @@ function ProSearch({ q, onOpen }) {
 export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
   const navigate = useNavigate();
 
-  const [view, setView] = useState({ name: "home" }); // { name: "home" | "folder" | "unfiled", folderId? }
+  // { name: "home" | "folder" | "unfiled", folderId?, folderName?, brandId? }
+  // brandId n'est posé que pour la vue d'un modèle (dossier enfant) : il
+  // permet au bouton retour de remonter vers la marque plutôt que l'accueil.
+  // folderName sert uniquement à préremplir le nom du dossier dans le
+  // panneau d'upload (folders, la liste top-level, ne connaît pas les noms
+  // des modèles).
+  const [view, setView] = useState({ name: "home" });
   const [folders, setFolders] = useState([]);
   const [unfiledCount, setUnfiledCount] = useState(0);
   const [version, setVersion] = useState(0);
@@ -110,10 +116,13 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
         unfiledCount={unfiledCount}
         activeFolderId={view.name === "folder" ? view.folderId : view.name === "unfiled" ? "unfiled" : ""}
         onSelectHome={goHome}
-        onSelectFolder={(f) => setView({ name: "folder", folderId: f.id })}
+        onSelectFolder={(f) => setView({ name: "folder", folderId: f.id, folderName: f.name })}
         onSelectUnfiled={() => setView({ name: "unfiled" })}
         onOpenUpload={() =>
-          setUpload({ folderId: view.name === "folder" ? view.folderId : undefined })
+          setUpload({
+            folderId: view.name === "folder" ? view.folderId : undefined,
+            folderName: view.name === "folder" ? view.folderName : undefined,
+          })
         }
         onLogout={onLogout}
         themePreference={themePreference}
@@ -139,7 +148,7 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
                 folders={folders}
                 unfiledCount={unfiledCount}
                 loading={loading}
-                onOpen={(f) => setView({ name: "folder", folderId: f.id })}
+                onOpen={(f) => setView({ name: "folder", folderId: f.id, folderName: f.name })}
                 onOpenUnfiled={() => setView({ name: "unfiled" })}
                 onCreate={() => setCreatingFolder(true)}
               />
@@ -153,10 +162,13 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
             space={SPACE}
             folderId={view.folderId}
             version={version}
-            onBack={goHome}
+            onBack={view.brandId ? () => setView({ name: "folder", folderId: view.brandId }) : goHome}
             onOpenDoc={setViewerDoc}
             onDeleteDoc={handleDelete}
-            onAddPdf={(folder) => setUpload({ folderId: folder.id })}
+            onAddPdf={(folder) => setUpload({ folderId: folder.id, folderName: folder.name })}
+            onOpenChild={(child) =>
+              setView({ name: "folder", folderId: child.id, folderName: child.name, brandId: view.folderId })
+            }
             onChanged={bump}
           />
         )}
@@ -189,7 +201,10 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
         onSelectHome={goHome}
         onSelectUnfiled={() => setView({ name: "unfiled" })}
         onOpenUpload={() =>
-          setUpload({ folderId: view.name === "folder" ? view.folderId : undefined })
+          setUpload({
+            folderId: view.name === "folder" ? view.folderId : undefined,
+            folderName: view.name === "folder" ? view.folderName : undefined,
+          })
         }
         onLogout={onLogout}
         themePreference={themePreference}
@@ -201,6 +216,7 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
           space={SPACE}
           folders={folders}
           initialFolderId={upload.folderId}
+          initialFolderName={upload.folderName}
           onClose={() => setUpload(null)}
           onUploaded={() => {
             setUpload(null);

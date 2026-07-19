@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { IconAlert, IconBot, IconSend, IconSparkle, IconTrash } from "./Icons.jsx";
+import { IconAlert, IconBot, IconSend, IconTrash } from "./Icons.jsx";
 
 // Assistant documentaire : bouton flottant + panneau de conversation.
 // La réponse arrive en SSE depuis /api/chat (voir server/routes/chat.js) ;
@@ -123,7 +123,6 @@ export function ChatPanel({ contextDoc = null }) {
     : [
         "Liste mes dossiers",
         "Quels documents ai-je sur le Xarios 200 ?",
-        "Résume mes interventions récentes",
       ];
 
   return (
@@ -137,10 +136,6 @@ export function ChatPanel({ contextDoc = null }) {
         >
           <span className="chat-fab__icon">
             <IconBot />
-          </span>
-          <span className="chat-fab__label">Assistant</span>
-          <span className="chat-fab__badge" aria-hidden="true">
-            <IconSparkle />
           </span>
         </button>
       )}
