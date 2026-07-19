@@ -35,6 +35,8 @@ export const api = {
 
   listDocuments: (space, filters = {}) =>
     request(`/api/documents?${withSpace(space, filters)}`),
+  getDocument: (space, id) =>
+    request(`/api/documents/${id}?${withSpace(space)}`).then((r) => r.document),
   searchDocuments: (space, q) => request(`/api/documents/search?${withSpace(space, { q })}`),
   listCategories: (space) => request(`/api/documents/categories?${withSpace(space)}`),
   registerDocument: (space, meta) =>

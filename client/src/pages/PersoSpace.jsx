@@ -112,7 +112,12 @@ export function PersoSpace({ themePreference, onChooseTheme, onLogout }) {
         />
       )}
       {viewerDoc && (
-        <Viewer doc={viewerDoc} onClose={() => setViewerDoc(null)} onDelete={handleDelete} />
+        <Viewer
+          doc={viewerDoc}
+          onClose={() => setViewerDoc(null)}
+          onDelete={handleDelete}
+          onChanged={bump}
+        />
       )}
     </div>
   );

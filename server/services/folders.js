@@ -89,6 +89,42 @@ export async function getOrCreateFolder(ownerId, space, name, parentId = null) {
   );
 }
 
+// Insensible aux espaces/tirets pour retrouver un modèle existant même si le
+// libellé fourni par l'IA diffère légèrement de l'orthographe stockée (ex.
+// "v200" doit retrouver "v-200") — évite de créer un doublon vide silencieux.
+const normalizeForMatch = (s) => s.replace(/[\s-]+/g, "");
+
+// Résolution marque/modèle à partir d'un libellé plat façon MCP/assistant, ex.
+// « carrier xarios 600 » : si le libellé commence par le nom d'une marque
+// existante (dossier de premier niveau) suivi d'un espace, le reste devient
+// un modèle enfant de cette marque (créé au besoin, sauf correspondance
+// existante à tiret/espace près) ; si le libellé est EXACTEMENT le nom d'une
+// marque, le document est rattaché directement à la marque (pas d'enfant) ;
+// sinon, comportement historique : dossier de premier niveau plat, créé au
+// besoin (limite acceptée : une toute nouvelle marque pas encore créée via
+// l'UI atterrit ainsi en dossier plat).
+export async function resolveFolderLabel(ownerId, space, label) {
+  const normalized = String(label).trim().toLowerCase();
+  const { folders: brands } = await listFolders(ownerId, space);
+  for (const brand of brands) {
+    if (normalized === brand.name) {
+      return getOrCreateFolder(ownerId, space, brand.name);
+    }
+    const prefix = `${brand.name} `;
+    if (normalized.startsWith(prefix)) {
+      const modelName = normalized.slice(prefix.length).trim();
+      if (modelName) {
+        const { folders: models } = await listFolders(ownerId, space, { parentId: brand.id });
+        const target = normalizeForMatch(modelName);
+        const existing = models.find((m) => normalizeForMatch(m.name) === target);
+        if (existing) return getFolder(ownerId, existing.id, space);
+        return getOrCreateFolder(ownerId, space, modelName, brand.id);
+      }
+    }
+  }
+  return getOrCreateFolder(ownerId, space, normalized);
+}
+
 const SPEC_SCALAR_FIELDS = [
   "refrigerant",
   "oil",

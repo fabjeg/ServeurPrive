@@ -7,7 +7,7 @@ import { useBackClose } from "../hooks/useBackClose.js";
 
 // Viewer multi-format : s'adapte au mimetype. Toutes les sources pointent vers
 // la route proxy authentifiée — jamais d'URL Blob directe.
-export function Viewer({ doc, onClose, onDelete, action }) {
+export function Viewer({ doc, onClose, onDelete, action, onChanged, initialPage }) {
   const fileUrl = api.fileUrl(doc.space, doc.id);
   const isImage = doc.mimetype.startsWith("image/");
   const isPdf = doc.mimetype === "application/pdf";
@@ -20,6 +20,42 @@ export function Viewer({ doc, onClose, onDelete, action }) {
   // Se réinitialise à chaque changement de document.
   const [barHidden, setBarHidden] = useState(true);
   useEffect(() => setBarHidden(true), [doc.id]);
+
+  // Titre modifiable en place. État local (pas dérivé du prop `doc`, qui ne
+  // se rafraîchit pas tout seul) : mis à jour dès l'enregistrement réussi,
+  // `onChanged` prévient le parent pour que les listes en arrière-plan
+  // se resynchronisent aussi.
+  const [filename, setFilename] = useState(doc.filename);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(doc.filename);
+  const [savingName, setSavingName] = useState(false);
+  useEffect(() => {
+    setFilename(doc.filename);
+    setEditingName(false);
+  }, [doc.id, doc.filename]);
+
+  const startEditingName = () => {
+    setNameDraft(filename);
+    setEditingName(true);
+  };
+  const commitName = async () => {
+    const trimmed = nameDraft.trim();
+    if (!trimmed || trimmed === filename) {
+      setEditingName(false);
+      return;
+    }
+    setSavingName(true);
+    try {
+      await api.updateDocument(doc.space, doc.id, { filename: trimmed });
+      setFilename(trimmed);
+      onChanged?.();
+    } catch (err) {
+      window.alert(err.message || "Renommage impossible.");
+    } finally {
+      setSavingName(false);
+      setEditingName(false);
+    }
+  };
 
   useBackClose(onClose);
 
@@ -49,11 +85,36 @@ export function Viewer({ doc, onClose, onDelete, action }) {
   };
 
   return (
-    <div className="overlay overlay--viewer" role="dialog" aria-modal="true" aria-label={doc.filename}>
+    <div className="overlay overlay--viewer" role="dialog" aria-modal="true" aria-label={filename}>
       <div className={`viewer ${reading ? "viewer--reading" : ""} ${barHidden ? "viewer--bar-hidden" : ""}`}>
         <header className="viewer__bar">
           <div className="viewer__info">
-            <p className="viewer__name">{doc.filename}</p>
+            {editingName ? (
+              <input
+                className="viewer__name-input"
+                value={nameDraft}
+                autoFocus
+                disabled={savingName}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onBlur={commitName}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    e.currentTarget.blur();
+                  }
+                  if (e.key === "Escape") setEditingName(false);
+                }}
+              />
+            ) : (
+              <button
+                type="button"
+                className="viewer__name"
+                onClick={startEditingName}
+                title="Modifier le titre"
+              >
+                {filename}
+              </button>
+            )}
             <p className="viewer__stamp">
               {doc.category} · {formatDate(doc.uploadedAt)} · {formatSize(doc.size)}
             </p>
@@ -104,9 +165,15 @@ export function Viewer({ doc, onClose, onDelete, action }) {
           className="viewer__stage"
           onClick={canRead ? () => setBarHidden((h) => !h) : undefined}
         >
-          {isImage && <img src={fileUrl} alt={doc.filename} />}
-          {isPdf && <PdfViewer url={fileUrl} downloadUrl={api.downloadUrl(doc.space, doc.id)} />}
-          {isText && <iframe src={fileUrl} title={doc.filename} className="viewer__text" />}
+          {isImage && <img src={fileUrl} alt={filename} />}
+          {isPdf && (
+            <PdfViewer
+              url={fileUrl}
+              downloadUrl={api.downloadUrl(doc.space, doc.id)}
+              initialPage={initialPage}
+            />
+          )}
+          {isText && <iframe src={fileUrl} title={filename} className="viewer__text" />}
           {!isImage && !isPdf && !isText && (
             <div className="viewer__fallback">
               <p>Pas de prévisualisation pour ce format ({doc.mimetype}).</p>

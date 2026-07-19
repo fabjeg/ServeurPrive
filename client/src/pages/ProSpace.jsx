@@ -76,11 +76,27 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
   const [loading, setLoading] = useState(false);
 
   const [viewerDoc, setViewerDoc] = useState(null);
+  const [viewerPage, setViewerPage] = useState(null);
   const [upload, setUpload] = useState(null); // null | { folderId? }
   const [creatingFolder, setCreatingFolder] = useState(false);
 
   const searching = Boolean(query);
   const bump = useCallback(() => setVersion((v) => v + 1), []);
+
+  const openDoc = (doc, page = null) => {
+    setViewerDoc(doc);
+    setViewerPage(page);
+  };
+  // Lien cliqué dans le chat ({{open:id}} ou {{open:id:page}}) : le document
+  // référencé n'est pas forcément déjà chargé côté client, on le récupère.
+  const openReference = async (docId, page) => {
+    try {
+      const doc = await api.getDocument(SPACE, docId);
+      openDoc(doc, page);
+    } catch {
+      window.alert("Document introuvable ou inaccessible.");
+    }
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -102,6 +118,7 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
     if (!window.confirm(`Supprimer définitivement « ${doc.filename} » ?`)) return;
     await api.deleteDocument(doc.space, doc.id);
     setViewerDoc(null);
+    setViewerPage(null);
     bump();
   };
 
@@ -142,7 +159,7 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
               />
             </header>
             {searching ? (
-              <ProSearch q={query} onOpen={setViewerDoc} />
+              <ProSearch q={query} onOpen={openDoc} />
             ) : (
               <FolderGrid
                 folders={folders}
@@ -163,7 +180,7 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
             folderId={view.folderId}
             version={version}
             onBack={view.brandId ? () => setView({ name: "folder", folderId: view.brandId }) : goHome}
-            onOpenDoc={setViewerDoc}
+            onOpenDoc={openDoc}
             onDeleteDoc={handleDelete}
             onAddPdf={(folder) => setUpload({ folderId: folder.id, folderName: folder.name })}
             onOpenChild={(child) =>
@@ -189,7 +206,7 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
             <DocumentGrid
               documents={unfiledDocs}
               loading={false}
-              onOpen={setViewerDoc}
+              onOpen={openDoc}
               onDelete={handleDelete}
             />
           </section>
@@ -236,10 +253,19 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
         />
       )}
       {viewerDoc && (
-        <Viewer doc={viewerDoc} onClose={() => setViewerDoc(null)} onDelete={handleDelete} />
+        <Viewer
+          doc={viewerDoc}
+          initialPage={viewerPage}
+          onClose={() => {
+            setViewerDoc(null);
+            setViewerPage(null);
+          }}
+          onDelete={handleDelete}
+          onChanged={bump}
+        />
       )}
 
-      <ChatPanel contextDoc={viewerDoc} />
+      <ChatPanel contextDoc={viewerDoc} onOpenReference={openReference} />
     </div>
   );
 }

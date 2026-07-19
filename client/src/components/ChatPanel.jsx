@@ -1,12 +1,46 @@
 import { useEffect, useRef, useState } from "react";
 import { IconAlert, IconBot, IconSend, IconTrash } from "./Icons.jsx";
 
+// Marqueur émis par l'assistant (voir SYSTEM_PROMPT dans server/routes/chat.js)
+// pour pointer vers un document précis, éventuellement à une page donnée :
+// {{open:<id>}} ou {{open:<id>:<page>}}. Transformé ci-dessous en bouton.
+const OPEN_REF_RE = /\{\{open:([a-f0-9]{24})(?::(\d+))?\}\}/gi;
+
+function renderMessageText(text, onOpenReference) {
+  if (!onOpenReference) return text;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+  let key = 0;
+  OPEN_REF_RE.lastIndex = 0;
+  while ((match = OPEN_REF_RE.exec(text))) {
+    if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+    const [, docId, pageStr] = match;
+    const page = pageStr ? Number(pageStr) : null;
+    parts.push(
+      <button
+        key={`ref-${key++}`}
+        type="button"
+        className="chat__doc-ref"
+        onClick={() => onOpenReference(docId, page)}
+      >
+        {page ? `Ouvrir · page ${page}` : "Ouvrir le document"}
+      </button>
+    );
+    lastIndex = OPEN_REF_RE.lastIndex;
+  }
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+  return parts;
+}
+
 // Assistant documentaire : bouton flottant + panneau de conversation.
 // La réponse arrive en SSE depuis /api/chat (voir server/routes/chat.js) ;
 // l'historique vit côté client, en texte simple uniquement.
 // contextDoc : document ouvert dans le viewer — transmis au serveur pour que
 // « ce document » désigne celui-là (le bot le lit avec read_document).
-export function ChatPanel({ contextDoc = null }) {
+// onOpenReference(docId, page) : ouvre un document (et sa page) cité par
+// l'assistant via un marqueur {{open:…}} — voir renderMessageText ci-dessus.
+export function ChatPanel({ contextDoc = null, onOpenReference }) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]); // { role, text, status? }
   const [input, setInput] = useState("");
@@ -132,7 +166,7 @@ export function ChatPanel({ contextDoc = null }) {
           type="button"
           className="chat-fab"
           onClick={() => setOpen(true)}
-          aria-label="Ouvrir l'assistant virtuel Frigo"
+          aria-label="Ouvrir Jarvis"
         >
           <span className="chat-fab__icon">
             <IconBot />
@@ -141,14 +175,14 @@ export function ChatPanel({ contextDoc = null }) {
       )}
 
       {open && (
-        <section className="chat" aria-label="Assistant virtuel documentaire">
+        <section className="chat" aria-label="Jarvis">
           <header className="chat__head">
             <div className="chat__identity">
               <span className="chat__avatar" aria-hidden="true">
                 <IconBot />
               </span>
               <div className="chat__identity-text">
-                <h2 className="chat__title">Assistant Frigo</h2>
+                <h2 className="chat__title">Jarvis</h2>
                 <p className="chat__subtitle">
                   <span className="chat__status-dot" aria-hidden="true" />
                   Assistant virtuel documentaire
@@ -174,7 +208,7 @@ export function ChatPanel({ contextDoc = null }) {
                 type="button"
                 className="chat__icon-btn"
                 onClick={() => setOpen(false)}
-                aria-label="Fermer l'assistant"
+                aria-label="Fermer Jarvis"
                 title="Fermer"
               >
                 ✕
@@ -194,7 +228,7 @@ export function ChatPanel({ contextDoc = null }) {
                 <span className="chat__welcome-icon" aria-hidden="true">
                   <IconBot />
                 </span>
-                <p className="chat__welcome-title">Bonjour, je suis l'assistant Frigo</p>
+                <p className="chat__welcome-title">Bonjour, je suis Jarvis</p>
                 <p className="chat__welcome-text">
                   {contextDoc
                     ? <>Pose-moi une question sur « {contextDoc.filename} » : je le lis pour toi.</>
@@ -222,7 +256,9 @@ export function ChatPanel({ contextDoc = null }) {
                   </span>
                 )}
                 <div className="chat__msg-body">
-                  {m.text && <p className="chat__bubble">{m.text}</p>}
+                  {m.text && (
+                    <p className="chat__bubble">{renderMessageText(m.text, onOpenReference)}</p>
+                  )}
                   {m.status && (
                     <p className="chat__status">
                       <span className="chat__typing" aria-hidden="true">

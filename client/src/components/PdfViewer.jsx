@@ -15,7 +15,7 @@ const clampZoom = (z) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
 // CSS des canvas déjà rendus — pas de re-rendu pdf.js à chaque cran de zoom.
 // Au-delà d'environ 2x, l'image perd en netteté (bitmap agrandi) : compromis
 // accepté pour rester fluide sur un pinch-zoom mobile.
-export function PdfViewer({ url, downloadUrl }) {
+export function PdfViewer({ url, downloadUrl, initialPage }) {
   const containerRef = useRef(null);
   const pagesRef = useRef([]); // [{ wrapper, canvas, baseWidth, baseHeight }]
   const pinchRef = useRef(null); // { startDist, startZoom } pendant un pinch tactile
@@ -123,6 +123,17 @@ export function PdfViewer({ url, downloadUrl }) {
     const target = pagesRef.current[n - 1];
     target?.wrapper.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
+
+  // Saut initial vers une page précise (lien envoyé par l'assistant) : attend
+  // que TOUTES les pages soient rendues (numPages n'est posé qu'à la toute
+  // fin du chargement), pas juste que le statut passe à "ready" (qui arrive
+  // dès la première page).
+  useEffect(() => {
+    if (numPages > 0 && initialPage > 1) {
+      goToPage(Math.min(initialPage, numPages));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [numPages, url]);
 
   const zoomBy = (delta) => setZoom((z) => clampZoom(Math.round((z + delta) * 100) / 100));
   const resetZoom = () => setZoom(1);

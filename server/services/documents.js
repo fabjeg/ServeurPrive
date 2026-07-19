@@ -380,10 +380,14 @@ export async function extractDocumentText(doc) {
     try {
       parser = new PDFParse({ data: new Uint8Array(await blobRes.arrayBuffer()) });
       const parsed = await parser.getText();
-      const text = (parsed.text || "").trim();
-      if (!text) {
+      if (!(parsed.text || "").trim()) {
         return { ok: false, reason: "PDF sans couche texte (scan) — non extractible sans OCR." };
       }
+      // Marqueurs de page (« --- Page N --- ») : permettent à l'assistant de
+      // citer une page précise (voir server/routes/chat.js, marqueur {{open:…}}).
+      const text = parsed.pages
+        .map((p) => `--- Page ${p.num} ---\n${p.text.trim()}`)
+        .join("\n\n");
       const truncated = text.length > EXTRACT_MAX_CHARS;
       return {
         ok: true,

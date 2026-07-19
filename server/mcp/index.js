@@ -18,8 +18,8 @@ import {
   deleteFolder,
   findFolderByName,
   getFolderDetail,
-  getOrCreateFolder,
   listFolders,
+  resolveFolderLabel,
   updateFolder,
 } from "../services/folders.js";
 
@@ -56,37 +56,14 @@ function docLine(d) {
   const kb = Math.round((d.size || 0) / 1024);
   const summaryPart =
     d.summaryStatus === "done" && d.summary ? `\n  Résumé : ${d.summary}` : "";
+  const folderPart = d.folderId ? `, dossier: ${d.folderId}` : ", non classé";
   return `- [${d._id}] ${d.filename} — catégorie: ${d.category}${
     d.tags.length ? `, tags: ${d.tags.join(", ")}` : ""
-  }, ${kb} Ko, ajouté le ${d.uploadedAt.toISOString().slice(0, 10)}${summaryPart}`;
+  }${folderPart}, ${kb} Ko, ajouté le ${d.uploadedAt.toISOString().slice(0, 10)}${summaryPart}`;
 }
 
 function textResult(text) {
   return { content: [{ type: "text", text }] };
-}
-
-// Résolution marque/modèle à partir d'un libellé plat façon MCP, ex.
-// « carrier xarios 600 » : si le libellé commence par le nom d'une marque
-// existante (dossier de premier niveau) suivi d'un espace, le reste devient
-// un modèle enfant de cette marque (créé au besoin) ; si le libellé est
-// EXACTEMENT le nom d'une marque, le document est rattaché directement à la
-// marque (pas d'enfant) ; sinon, comportement historique : dossier de
-// premier niveau plat, créé au besoin (limite acceptée : une toute nouvelle
-// marque pas encore créée via l'UI atterrit ainsi en dossier plat).
-async function resolveFolderLabel(ownerId, space, label) {
-  const normalized = String(label).trim().toLowerCase();
-  const { folders: brands } = await listFolders(ownerId, space);
-  for (const brand of brands) {
-    if (normalized === brand.name) {
-      return getOrCreateFolder(ownerId, space, brand.name);
-    }
-    const prefix = `${brand.name} `;
-    if (normalized.startsWith(prefix)) {
-      const modelName = normalized.slice(prefix.length).trim();
-      if (modelName) return getOrCreateFolder(ownerId, space, modelName, brand.id);
-    }
-  }
-  return getOrCreateFolder(ownerId, space, normalized);
 }
 
 function buildServer() {
@@ -97,7 +74,10 @@ function buildServer() {
     {
       title: "Lister les documents",
       description:
-        "Liste les documents du coffre, avec filtres optionnels par catégorie et tag.",
+        "Liste les documents du coffre, avec filtres optionnels par catégorie, tag et dossier. " +
+        "Utile pour ranger le coffre : `unfiled: true` liste les documents non classés, et lister " +
+        "sans filtre (ou par marque) permet de repérer un document déjà classé au mauvais endroit " +
+        "avant de le déplacer avec update_document.",
       inputSchema: {
         category: z.string().optional().describe("Filtrer par catégorie"),
         tag: z.string().optional().describe("Filtrer par tag"),
@@ -105,12 +85,18 @@ function buildServer() {
           .string()
           .optional()
           .describe("Filtrer par dossier (nom exact, voir list_folders)"),
+        unfiled: z
+          .boolean()
+          .optional()
+          .describe("Limiter aux documents non classés (aucun dossier) ; ignore `folder` si les deux sont fournis"),
         limit: z.number().int().min(1).max(200).optional().describe("Nombre max de résultats"),
       },
     },
-    async ({ category, tag, folder, limit }) => {
+    async ({ category, tag, folder, unfiled, limit }) => {
       let folderId;
-      if (folder) {
+      if (unfiled) {
+        folderId = "none";
+      } else if (folder) {
         const f = await findFolderByName(OWNER_ID, SPACE, folder);
         if (!f) return textResult(`Dossier « ${folder} » introuvable (voir list_folders).`);
         folderId = f._id.toString();
@@ -507,7 +493,9 @@ function buildServer() {
         "charge, fusibles, pressions HP/BP, codes défauts). À utiliser après avoir lu un document " +
         "(get_document_content) qui donne ces informations de façon fiable — ne jamais inventer une " +
         "valeur. Seuls les champs fournis sont modifiés, les autres restent inchangés ; fault_codes " +
-        "remplace la liste entière (fournir la liste complète voulue, existants inclus).",
+        "remplace la liste entière (fournir la liste complète voulue, existants inclus). " +
+        "IMPORTANT : `model` doit désigner un modèle précis, jamais une marque seule (ex. « thermo " +
+        "king v-200 », pas « thermo king ») — un nom de marque seul échoue volontairement.",
       inputSchema: {
         model: z
           .string()
@@ -545,6 +533,12 @@ function buildServer() {
         );
       }
       const folder = await resolveFolderLabel(OWNER_ID, SPACE, model);
+      if (!folder.parentId) {
+        return textResult(
+          `« ${folder.name} » est une marque, pas un modèle : précise le modèle exact ` +
+            `(ex. « ${folder.name} v-200 »). Aucune modification effectuée.`
+        );
+      }
       const updated = await updateFolder(OWNER_ID, folder._id.toString(), SPACE, { specs });
       const { specs: s } = updated.toClient();
       const lines = [

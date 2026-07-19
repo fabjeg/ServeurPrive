@@ -332,6 +332,25 @@
     }
   }
 
+  &__doc-ref {
+    @include focus-ring;
+    display: inline-flex;
+    align-items: center;
+    margin: 0.15rem 0.15rem 0;
+    padding: 0.15rem 0.65rem;
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+
+    &:hover {
+      background: var(--accent);
+      color: var(--accent-contrast);
+    }
+  }
+
   &__error {
     display: flex;
     align-items: center;

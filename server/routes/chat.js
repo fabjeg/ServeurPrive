@@ -8,8 +8,15 @@ import {
   extractDocumentText,
   getDocument,
   listDocuments,
+  updateDocument,
 } from "../services/documents.js";
-import { getFolderDetail, listFolders, updateFolder } from "../services/folders.js";
+import {
+  getFolder,
+  getFolderDetail,
+  listFolders,
+  resolveFolderLabel,
+  updateFolder,
+} from "../services/folders.js";
 
 export const chatRouter = Router();
 
@@ -21,7 +28,7 @@ const SPACE = "pro";
 
 const MAX_HISTORY_MESSAGES = 30;
 
-const SYSTEM_PROMPT = `Tu es l'assistant du coffre documentaire « Frigo » d'un technicien frigoriste.
+const SYSTEM_PROMPT = `Tu es Jarvis, l'assistant du coffre documentaire « Frigo » d'un technicien frigoriste.
 Le coffre contient des documents professionnels (notices PDF, schémas électriques, plans, photos)
 classés dans des dossiers — un dossier correspond à un modèle de frigo/groupe froid (ex. « carrier xarios 200 »)
 .
@@ -37,32 +44,59 @@ Règles :
 - Réponds en texte simple, sans Markdown : pas de **gras** ni de titres #. Des tirets « - » pour les listes sont acceptés.
 - Si aucun document ne correspond, dis-le franchement avant de répondre de mémoire.
 - Les PDF scannés sans couche texte ne sont pas lisibles : signale-le si tu tombes dessus.
-- Tu es en lecture seule sur les documents : tu ne peux jamais en ajouter, modifier ou supprimer.
-- Tu peux en revanche renseigner la fiche technique d'un modèle (update_model_specs) quand un
-  document que tu viens de lire donne ces informations de façon fiable — jamais une valeur inventée
-  ou supposée. Dis à l'utilisateur ce que tu as enregistré.`;
+- Quand tu renvoies vers un document précis (a fortiori une page précise), ajoute juste après
+  l'avoir cité un marqueur {{open:ID}} ou {{open:ID:PAGE}} (ID = identifiant renvoyé par
+  search_documents/read_document, PAGE = numéro vu dans un marqueur « --- Page N --- » de
+  read_document) — il devient un bouton cliquable qui ouvre directement le document à la bonne
+  page. N'utilise ce marqueur que pour un document que tu as identifié avec certitude (jamais un ID
+  halluciné) ; un simple nom de document sans avoir appelé search_documents/read_document ne suffit
+  pas.
+- Tu ne peux jamais supprimer un document ou un dossier : cette action reste interdite, quoi qu'on
+  te demande.
+- Tu peux en revanche déplacer un document vers un autre dossier (update_document, champ folder) et
+  modifier ses métadonnées (nom de fichier, catégorie, tags, description) quand l'utilisateur te le
+  demande explicitement, ou quand c'est une correction évidente et sans ambiguïté (ex. mauvaise
+  catégorie détectée à l'upload). En cas de doute sur l'intention, demande confirmation avant d'agir.
+- Quand on te demande de ranger/trier le coffre (ou une marque en particulier) : utilise
+  search_documents (folder_id: "none" pour les non classés, ou sans filtre pour repérer un document
+  déjà classé au mauvais endroit — chaque résultat indique son folderId actuel) et list_folders/
+  get_folder pour connaître les modèles existants, lis le contenu si le nom de fichier ne suffit pas
+  à trancher, puis déplace chaque document concerné directement avec update_document sans demander
+  confirmation à chacun. Termine toujours par un récapitulatif de ce qui a été déplacé (et vers où).
+- Tu peux aussi renseigner la fiche technique d'un modèle (update_model_specs) quand un document que
+  tu viens de lire donne ces informations de façon fiable — jamais une valeur inventée ou supposée.
+- Dis toujours à l'utilisateur ce que tu as modifié.`;
 
 const TOOLS = [
   {
     name: "search_documents",
     description:
-      "Recherche des documents dans le coffre par mots-clés (nom de fichier, tags, catégorie). " +
-      "Appelle cet outil dès que la question porte sur un équipement, une notice ou un schéma. " +
-      "Essaie plusieurs variantes de mots-clés si la première recherche ne donne rien.",
+      "Recherche des documents dans le coffre par mots-clés (nom de fichier, tags, catégorie), et/ou " +
+      "liste-les par dossier. Appelle cet outil dès que la question porte sur un équipement, une " +
+      "notice ou un schéma. Essaie plusieurs variantes de mots-clés si la première recherche ne " +
+      "donne rien. Pour ranger le coffre : omets q et mets folder_id à \"none\" pour lister les " +
+      "documents non classés, ou liste sans filtre pour repérer un document déjà mal classé (chaque " +
+      "résultat indique son folderId actuel, à comparer avec list_folders/get_folder) avant de le " +
+      "déplacer avec update_document.",
     input_schema: {
       type: "object",
       properties: {
-        q: { type: "string", description: "Mots-clés (ex. « xarios », « schema electrique »)" },
-        folder_id: { type: "string", description: "Limiter à un dossier (id MongoDB)" },
+        q: { type: "string", description: "Mots-clés (ex. « xarios », « schema electrique »), optionnel si on filtre juste par dossier" },
+        folder_id: {
+          type: "string",
+          description: "Limiter à un dossier (id MongoDB), ou \"none\" pour les documents non classés",
+        },
+        limit: { type: "number", description: "Nombre max de résultats (défaut 25, max 200)" },
       },
-      required: ["q"],
     },
   },
   {
     name: "read_document",
     description:
       "Lit le contenu texte d'un document (extraction du texte des PDF). " +
-      "À utiliser après search_documents pour lire les documents pertinents avant de répondre.",
+      "À utiliser après search_documents pour lire les documents pertinents avant de répondre. " +
+      "Le texte des PDF est découpé par des marqueurs « --- Page N --- » : utilise-les pour citer " +
+      "la page exacte où se trouve une information (voir le marqueur {{open:…}} plus bas).",
     input_schema: {
       type: "object",
       properties: {
@@ -90,12 +124,42 @@ const TOOLS = [
     },
   },
   {
+    name: "update_document",
+    description:
+      "Modifie les métadonnées d'un document : nom de fichier, catégorie, tags, description " +
+      "et/ou dossier de rattachement. Ne modifie jamais le fichier lui-même. Pour déplacer un " +
+      "document vers un modèle, fournir folder (ex. « carrier xarios 350 » — créé au besoin) ; " +
+      "chaîne vide pour détacher. Seuls les champs fournis sont modifiés.",
+    input_schema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Id du document (renvoyé par search_documents)" },
+        filename: { type: "string", description: "Nouveau nom de fichier" },
+        category: { type: "string", description: "Nouvelle catégorie (minuscules)" },
+        tags: {
+          type: "array",
+          items: { type: "string" },
+          description: "Nouvelle liste de tags (remplace l'existante)",
+        },
+        description: { type: "string", description: "Nouvelle note libre" },
+        folder: {
+          type: "string",
+          description:
+            "Dossier de rattachement, ex. « carrier xarios 350 » (créé au besoin) ; chaîne vide pour détacher",
+        },
+      },
+      required: ["id"],
+    },
+  },
+  {
     name: "update_model_specs",
     description:
       "Renseigne ou corrige la fiche technique d'un modèle (réfrigérant, huile, compresseur, " +
       "charge, fusibles, pressions HP/BP, codes défauts) — uniquement à partir d'une information " +
       "trouvée dans un document lu (read_document), jamais inventée. Seuls les champs fournis sont " +
-      "modifiés. fault_codes remplace la liste entière : fournir la liste complète voulue.",
+      "modifiés. fault_codes remplace la liste entière : fournir la liste complète voulue. " +
+      "IMPORTANT : folder_id doit être l'id du MODÈLE précis (utilise get_folder sur la marque pour " +
+      "trouver l'id de son modèle enfant), jamais l'id d'une marque seule.",
     input_schema: {
       type: "object",
       properties: {
@@ -134,11 +198,11 @@ async function runTool(ownerId, name, input) {
     case "search_documents": {
       const docs = await listDocuments(ownerId, {
         space: SPACE,
-        q: input.q,
+        q: input.q || undefined,
         folder: input.folder_id,
-        limit: 25,
+        limit: Math.min(Number(input.limit) || 25, 200),
       });
-      if (!docs.length) return { results: [], note: "Aucun document trouvé pour ces mots-clés." };
+      if (!docs.length) return { results: [], note: "Aucun document ne correspond à ces filtres." };
       return { results: docs.map((d) => docSummary(d.toClient ? d.toClient() : d)) };
     }
     case "read_document": {
@@ -174,7 +238,36 @@ async function runTool(ownerId, name, input) {
         stats: detail.stats,
       };
     }
+    case "update_document": {
+      const doc = await getDocument(ownerId, String(input.id || ""), SPACE);
+      if (!doc) return { error: "Document introuvable." };
+      let folderId;
+      if (input.folder !== undefined) {
+        folderId = input.folder.trim()
+          ? (await resolveFolderLabel(ownerId, SPACE, input.folder))._id
+          : null;
+      }
+      const updated = await updateDocument(ownerId, String(input.id), SPACE, {
+        filename: input.filename?.replace(/[/\\]/g, "_"),
+        category: input.category,
+        tags: input.tags,
+        description: input.description,
+        folderId,
+      });
+      if (!updated) return { error: "Document introuvable." };
+      return { document: docSummary(updated.toClient()) };
+    }
     case "update_model_specs": {
+      const targetFolder = await getFolder(ownerId, String(input.folder_id || ""), SPACE);
+      if (!targetFolder) return { error: "Dossier introuvable." };
+      if (!targetFolder.parentId) {
+        return {
+          error:
+            `« ${targetFolder.name} » est une marque, pas un modèle : la fiche technique se ` +
+            "renseigne sur un modèle précis. Appelle get_folder sur cette marque pour trouver " +
+            "l'id du modèle voulu parmi ses enfants.",
+        };
+      }
       const specs = {
         ...(input.refrigerant !== undefined && { refrigerant: input.refrigerant }),
         ...(input.oil !== undefined && { oil: input.oil }),
@@ -188,7 +281,7 @@ async function runTool(ownerId, name, input) {
       if (!Object.keys(specs).length) {
         return { error: "Aucun champ fourni." };
       }
-      const updated = await updateFolder(ownerId, String(input.folder_id || ""), SPACE, { specs });
+      const updated = await updateFolder(ownerId, targetFolder._id.toString(), SPACE, { specs });
       if (!updated) return { error: "Dossier introuvable." };
       return { folder: updated.toClient() };
     }
@@ -203,6 +296,7 @@ const TOOL_LABELS = {
   read_document: () => "Lecture d'un document",
   list_folders: () => "Consultation des dossiers",
   get_folder: () => "Consultation d'un dossier",
+  update_document: () => "Modification du document",
   update_model_specs: () => "Mise à jour de la fiche technique",
 };
 

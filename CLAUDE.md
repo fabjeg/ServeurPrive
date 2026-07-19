@@ -73,8 +73,8 @@ Streamable HTTP stateless (un serveur par POST). Dix tools :
   rattachés (équivalent d'un « non classé » scopé à cette marque).
   `add_document`/`update_document` résolvent un libellé plat façon
   « carrier xarios 600 » par préfixe de marque existante (voir
-  `resolveFolderLabel` dans `server/mcp/index.js`) — pas de nouveau
-  paramètre côté schéma MCP.
+  `resolveFolderLabel` dans `server/services/folders.js`, partagée avec
+  l'assistant web) — pas de nouveau paramètre côté schéma MCP.
 - `delete_document`, `delete_folder` : exigent `confirmed: true` et une
   confirmation explicite de l'utilisateur dans la conversation — jamais à
   l'initiative de l'IA. `delete_folder` conserve les documents (détachés,
@@ -90,10 +90,14 @@ Streamable HTTP stateless (un serveur par POST). Dix tools :
 Convention métadonnées : catégories/tags/dossiers en minuscules, style
 « carrier xarios 200 » / « schema electrique » (capitalisation en CSS).
 
-L'assistant web (`server/routes/chat.js`, bouton IA de l'appli) est
-lecture seule sur les documents mais peut lui aussi appeler
-`update_model_specs` (même logique de fusion) — seule capacité d'écriture
-qu'il possède.
+L'assistant web (`server/routes/chat.js`, bouton IA de l'appli) peut lui
+aussi écrire, avec les mêmes outils logiques que le MCP : `update_document`
+(déplacer vers un dossier via `resolveFolderLabel`, modifier nom/catégorie/
+tags/description) et `update_model_specs` (même logique de fusion). Il ne
+peut en revanche jamais supprimer un document ou un dossier — pas
+d'équivalent de `delete_document`/`delete_folder` côté chat, contrainte
+uniquement portée par l'absence du tool (rien dans le schéma ne l'en
+empêcherait techniquement si le tool existait).
 
 ## Commandes
 
