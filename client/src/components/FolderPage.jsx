@@ -18,9 +18,10 @@ function StatTile({ icon: Icon, label, value }) {
   );
 }
 
-// Groupe les modèles d'une marque par catégorie de véhicule (stockée dans
-// la description du dossier modèle) — les modèles sans description
-// tombent dans un groupe "Autres" affiché en dernier.
+// Groupe les modèles d'une marque par ligne de produit (Xarios, Vector,
+// Neos, Supra, Zephyr, V, T… — stockée dans la description du dossier
+// modèle) — les modèles sans description tombent dans un groupe "Autres"
+// affiché en dernier.
 function groupByCategory(childFolders) {
   const groups = new Map();
   for (const f of childFolders) {
