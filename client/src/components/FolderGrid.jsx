@@ -5,7 +5,7 @@ export function FolderCard({ folder, onOpen }) {
   return (
     <li>
       <button className="folder-card" onClick={() => onOpen(folder)}>
-        <span className="folder-card__icon">
+        <span className={`folder-card__icon ${folder.hasLogo ? "folder-card__icon--logo" : ""}`}>
           {folder.hasLogo ? (
             <img src={api.folderLogoUrl(folder.space, folder.id)} alt="" />
           ) : (
