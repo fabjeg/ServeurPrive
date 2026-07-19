@@ -118,6 +118,24 @@ export const IconSend = (p) => (
   </Icon>
 );
 
+export const IconMinus = (p) => (
+  <Icon {...p}>
+    <path d="M5 12h14" />
+  </Icon>
+);
+
+export const IconExpand = (p) => (
+  <Icon {...p}>
+    <path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" />
+  </Icon>
+);
+
+export const IconCollapse = (p) => (
+  <Icon {...p}>
+    <path d="M4 9V4h5M15 4h5v5M4 15v5h5M20 15v5h-5" />
+  </Icon>
+);
+
 export const IconTrash = (p) => (
   <Icon {...p}>
     <path d="M4.5 7h15" />

@@ -54,8 +54,42 @@
     white-space: nowrap;
   }
 
+  &__desc-wrap {
+    position: relative;
+  }
+
   &__desc {
     color: var(--text-muted);
+    font-family: $font-mono;
+    font-size: var(--fs-sm);
+    line-height: 1.5;
+
+    // Replié par défaut sur mobile : 2 lignes puis "Voir plus". Sur desktop,
+    // la description est toujours intégralement affichée (peu de risque
+    // qu'elle prenne toute la place à côté du reste de l'en-tête).
+    @media (max-width: 720px) {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+
+      .folder-page__desc-wrap.is-open & {
+        -webkit-line-clamp: unset;
+        overflow: visible;
+      }
+    }
+  }
+
+  &__desc-toggle {
+    @include stamp;
+    @include focus-ring;
+    display: none;
+    margin-top: 0.25rem;
+    color: var(--accent);
+
+    @media (max-width: 720px) {
+      display: inline-block;
+    }
   }
 
   &__actions {
@@ -71,6 +105,14 @@
     gap: 0.9rem;
     padding-top: 1.25rem;
     border-top: 1px solid var(--border);
+  }
+
+  // Interventions fréquentes : réservé au desktop, prend trop de place sur
+  // mobile où l'essentiel est de consulter les documents (PDF/photos).
+  &__section--interventions {
+    @media (max-width: 720px) {
+      display: none;
+    }
   }
 
   &__section-head {

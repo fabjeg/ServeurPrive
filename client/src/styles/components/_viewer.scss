@@ -2,19 +2,59 @@
 @use "../abstracts/mixins" as *;
 
 .viewer {
-  display: flex;
-  flex-direction: column;
+  position: relative;
   width: 100%;
   height: 100%;
   color: var(--text-on-inverse);
 
+  // En superposition (pas dans le flux) : repliée, elle ne doit réserver
+  // aucun espace — le document doit pouvoir occuper 100% de la hauteur.
   &__bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 2;
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 1rem;
     padding: 0.9rem 1.5rem;
     border-bottom: 1px solid color-mix(in srgb, var(--text-on-inverse) 15%, transparent);
+    background: var(--surface-inverse);
+
+    @media (prefers-reduced-motion: no-preference) {
+      transition: transform 160ms ease, opacity 160ms ease;
+    }
+  }
+
+  // Repliée au clic sur l'image/le PDF : la barre glisse hors champ, un petit
+  // bouton flottant (__reveal) permet de la ramener.
+  &--bar-hidden &__bar {
+    transform: translateY(-100%);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  &__reveal {
+    @include focus-ring;
+    position: fixed;
+    top: 0.9rem;
+    right: 0.9rem;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--surface-inverse) 85%, transparent);
+    border: 1px solid color-mix(in srgb, var(--text-on-inverse) 15%, transparent);
+    color: var(--text-on-inverse);
+    box-shadow: var(--shadow-2);
+
+    &:hover {
+      background: var(--surface-inverse);
+    }
   }
 
   &__name {
@@ -52,13 +92,37 @@
     }
   }
 
+  // Mode lecture : la barre se réduit à un simple bouton de sortie flottant
+  // pour maximiser la place du document — le chat reste accessible par-dessus
+  // (position fixed, hors de ce composant, jamais masqué par ce mode).
+  &--reading &__bar {
+    left: auto;
+    border-bottom: none;
+    padding: 0.6rem;
+    background: transparent;
+  }
+
+  &--reading &__info,
+  &--reading &__actions .btn:not(:first-child) {
+    display: none;
+  }
+
+  &--reading &__actions {
+    background: color-mix(in srgb, var(--surface-inverse) 80%, transparent);
+    border-radius: $radius;
+  }
+
   &__stage {
-    flex: 1;
-    min-height: 0; // sans ça, l'enfant flex garde la hauteur de son contenu et rien ne défile
+    // La barre est en superposition (position: absolute) : le document
+    // occupe donc toujours 100% de la hauteur du viewer, qu'elle soit
+    // affichée ou repliée.
+    width: 100%;
+    height: 100%;
     display: grid;
     place-items: center;
     overflow: auto;
     padding: 1rem;
+    cursor: pointer; // image/PDF : un tap replie/déplie la barre du haut
 
     img {
       max-height: 100%;
@@ -76,9 +140,15 @@
   }
 
   .pdf-view {
+    position: relative;
     width: 100%;
     height: 100%;
-    overflow-y: auto;
+    // Sans ça, la hauteur en % ne se résout pas de façon fiable : le parent
+    // est une grille avec place-items: center, donc les éléments ne sont
+    // stretchés par défaut que si on le demande explicitement — sinon la
+    // hauteur reste indéfinie et overflow-y: auto n'a jamais rien à scroller.
+    align-self: stretch;
+    overflow: auto;
     overscroll-behavior: contain;
 
     &__pages {
@@ -86,12 +156,97 @@
       flex-direction: column;
       align-items: center;
       gap: 0.75rem;
+      padding-bottom: 3.5rem; // laisse la place à la barre d'outils flottante
+      touch-action: pan-x pan-y; // le pinch (2 doigts) reste géré en JS pour le zoom
 
-      canvas {
-        max-width: 100%;
-        border-radius: $radius;
-        background: var(--paper);
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+      // Zoomé : les pages peuvent dépasser la largeur du conteneur, il faut
+      // pouvoir les parcourir horizontalement (pan) au lieu de les tasser.
+      &.is-zoomed {
+        align-items: flex-start;
+      }
+    }
+
+    &__page canvas {
+      display: block;
+      max-width: none;
+      border-radius: $radius;
+      background: var(--paper);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+    }
+
+    // fixed (pas absolute) : le viewer occupe déjà tout l'écran, donc la barre
+    // flotte à une position d'écran constante quel que soit le défilement
+    // interne du PDF — même logique que .chat-fab ailleurs dans l'app.
+    &__toolbar {
+      position: fixed;
+      left: 50%;
+      bottom: 1.25rem;
+      transform: translateX(-50%);
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.6rem;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--surface-inverse) 92%, transparent);
+      border: 1px solid color-mix(in srgb, var(--text-on-inverse) 15%, transparent);
+      box-shadow: var(--shadow-2);
+    }
+
+    &__pagenav,
+    &__zoomnav {
+      display: flex;
+      align-items: center;
+      gap: 0.15rem;
+    }
+
+    &__zoomnav {
+      padding-left: 0.5rem;
+      border-left: 1px solid color-mix(in srgb, var(--text-on-inverse) 15%, transparent);
+    }
+
+    &__tool {
+      @include focus-ring;
+      display: grid;
+      place-items: center;
+      width: 1.9rem;
+      height: 1.9rem;
+      border-radius: 50%;
+      color: var(--text-on-inverse);
+
+      svg {
+        width: 1em;
+        height: 1em;
+      }
+
+      &:hover:not(:disabled) {
+        background: color-mix(in srgb, var(--text-on-inverse) 15%, transparent);
+      }
+
+      &:disabled {
+        opacity: 0.35;
+      }
+    }
+
+    &__page-count {
+      min-width: 3.6rem;
+      text-align: center;
+      font-family: $font-mono;
+      font-size: var(--fs-sm);
+      color: var(--text-on-inverse);
+    }
+
+    &__zoom-value {
+      @include focus-ring;
+      min-width: 3.2rem;
+      padding: 0.2rem 0.3rem;
+      border-radius: $radius;
+      font-family: $font-mono;
+      font-size: var(--fs-sm);
+      color: var(--text-on-inverse);
+
+      &:hover {
+        background: color-mix(in srgb, var(--text-on-inverse) 15%, transparent);
       }
     }
 

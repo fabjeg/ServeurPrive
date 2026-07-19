@@ -89,6 +89,7 @@ export function FolderPage({ space, folderId, version, onBack, onOpenDoc, onDele
   const [error, setError] = useState("");
   const [interventionForm, setInterventionForm] = useState(null); // null | {} | { intervention }
   const [editingFolder, setEditingFolder] = useState(false);
+  const [descOpen, setDescOpen] = useState(false);
 
   useBackClose(onBack);
 
@@ -149,7 +150,20 @@ export function FolderPage({ space, folderId, version, onBack, onOpenDoc, onDele
             {stats.documentCount > 1 ? "s" : ""}
           </span>
         </div>
-        {folder.description && <p className="folder-page__desc">{folder.description}</p>}
+        {folder.description && (
+          <div className={`folder-page__desc-wrap ${descOpen ? "is-open" : ""}`}>
+            <p className="folder-page__desc">{folder.description}</p>
+            {folder.description.length > 80 && (
+              <button
+                type="button"
+                className="folder-page__desc-toggle"
+                onClick={() => setDescOpen((o) => !o)}
+              >
+                {descOpen ? "Réduire" : "Voir plus"}
+              </button>
+            )}
+          </div>
+        )}
         <div className="folder-page__actions">
           <button className="btn btn--primary" onClick={() => onAddPdf(folder)}>
             + Ajouter un document
@@ -174,7 +188,7 @@ export function FolderPage({ space, folderId, version, onBack, onOpenDoc, onDele
         </ul>
       )}
 
-      <section className="folder-page__section">
+      <section className="folder-page__section folder-page__section--interventions">
         <div className="folder-page__section-head">
           <h2 className="folder-page__section-title">
             <IconWrench /> Interventions fréquentes
