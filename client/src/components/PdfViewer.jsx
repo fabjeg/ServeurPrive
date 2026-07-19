@@ -139,19 +139,33 @@ export function PdfViewer({ url, downloadUrl, initialPage }) {
   const resetZoom = () => setZoom(1);
 
   // Pinch tactile (mobile) : distance entre les deux doigts → facteur de zoom.
+  // Le listener touchmove est attaché nativement (pas via la prop JSX
+  // onTouchMove) avec { passive: false } : React attache ses écouteurs
+  // touchmove en passive par défaut, ce qui fait échouer silencieusement
+  // e.preventDefault() — le pinch natif du navigateur (zoom de tout l'écran,
+  // hors de portée du recalcul de la zone de défilement) prenait alors le
+  // dessus sur celui de l'app, rendant certains bords du document inaccessibles
+  // au défilement une fois zoomé.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const handleTouchMove = (e) => {
+      if (e.touches.length !== 2 || !pinchRef.current) return;
+      e.preventDefault();
+      const [a, b] = e.touches;
+      const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      const { startDist, startZoom } = pinchRef.current;
+      setZoom(clampZoom(startZoom * (dist / startDist)));
+    };
+    el.addEventListener("touchmove", handleTouchMove, { passive: false });
+    return () => el.removeEventListener("touchmove", handleTouchMove);
+  }, []);
+
   const onTouchStart = (e) => {
     if (e.touches.length !== 2) return;
     const [a, b] = e.touches;
     const startDist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
     pinchRef.current = { startDist, startZoom: zoom };
-  };
-  const onTouchMove = (e) => {
-    if (e.touches.length !== 2 || !pinchRef.current) return;
-    e.preventDefault();
-    const [a, b] = e.touches;
-    const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-    const { startDist, startZoom } = pinchRef.current;
-    setZoom(clampZoom(startZoom * (dist / startDist)));
   };
   const onTouchEnd = (e) => {
     if (e.touches.length < 2) pinchRef.current = null;
@@ -179,7 +193,6 @@ export function PdfViewer({ url, downloadUrl, initialPage }) {
         className={`pdf-view__pages ${zoom !== 1 ? "is-zoomed" : ""}`}
         ref={containerRef}
         onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
         onWheel={onWheel}
       />
