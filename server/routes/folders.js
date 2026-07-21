@@ -50,11 +50,11 @@ foldersRouter.post("/", async (req, res, next) => {
   try {
     const space = parseSpace(req.body?.space);
     if (!space) return res.status(400).json(SPACE_ERROR);
-    const { name, description, parentId } = req.body || {};
+    const { name, description, parentId, hidden } = req.body || {};
     if (!name || !String(name).trim()) {
       return res.status(400).json({ error: "Nom de dossier requis." });
     }
-    const folder = await createFolder(req.ownerId, space, { name, description, parentId });
+    const folder = await createFolder(req.ownerId, space, { name, description, parentId, hidden });
     res.status(201).json({ folder: folder.toClient() });
   } catch (err) {
     if (err.code === 11000) {
@@ -84,12 +84,13 @@ foldersRouter.patch("/:id", async (req, res, next) => {
   try {
     const space = parseSpace(req.body?.space);
     if (!space) return res.status(400).json(SPACE_ERROR);
-    const { name, description, parentId, specs } = req.body || {};
+    const { name, description, parentId, specs, hidden } = req.body || {};
     const folder = await updateFolder(req.ownerId, req.params.id, space, {
       name,
       description,
       parentId,
       specs,
+      hidden,
     });
     if (!folder) return res.status(404).json({ error: "Dossier introuvable." });
     res.json({ folder: folder.toClient() });

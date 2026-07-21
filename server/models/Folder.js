@@ -39,6 +39,10 @@ const folderSchema = new mongoose.Schema(
       blobUrl: { type: String, default: null },
       mimetype: { type: String, default: null },
     },
+    // Masque une marque (parentId null) de la grille de la page d'accueil —
+    // reste accessible normalement via la sidebar/son URL. Sans effet sur un
+    // modèle (jamais affiché dans cette grille de toute façon).
+    hidden: { type: Boolean, default: false },
     ownerId: { type: String, required: true, index: true },
     createdAt: { type: Date, default: Date.now },
   },
@@ -65,6 +69,7 @@ folderSchema.methods.toClient = function toClient() {
       faultCodes: this.specs?.faultCodes || [],
     },
     hasLogo: Boolean(this.logo?.blobPath),
+    hidden: this.hidden,
     createdAt: this.createdAt,
   };
 };

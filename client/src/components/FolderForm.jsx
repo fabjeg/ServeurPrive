@@ -10,6 +10,7 @@ import { useBackClose } from "../hooks/useBackClose.js";
 export function FolderForm({ space, folder, parentId, onClose, onSaved }) {
   const [name, setName] = useState(folder?.name || "");
   const [description, setDescription] = useState(folder?.description || "");
+  const [hidden, setHidden] = useState(folder?.hidden || false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const isModel = Boolean(parentId || folder?.parentId);
@@ -22,7 +23,12 @@ export function FolderForm({ space, folder, parentId, onClose, onSaved }) {
     setBusy(true);
     setError("");
     try {
-      const body = { name: name.trim().toLowerCase(), description: description.trim(), parentId };
+      const body = {
+        name: name.trim().toLowerCase(),
+        description: description.trim(),
+        parentId,
+        ...(isModel ? {} : { hidden }),
+      };
       const res = folder
         ? await api.updateFolder(folder.space, folder.id, body)
         : await api.createFolder(space, body);
@@ -64,6 +70,13 @@ export function FolderForm({ space, folder, parentId, onClose, onSaved }) {
             placeholder="Référentiel unique du modèle"
           />
         </label>
+
+        {!isModel && (
+          <label className="field field--checkbox">
+            <input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} />
+            <span>Masquer de la page d'accueil (reste accessible depuis la sidebar)</span>
+          </label>
+        )}
 
         {error && <p className="panel-form__error">{error}</p>}
 

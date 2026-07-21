@@ -72,11 +72,18 @@ export async function findFolderByName(ownerId, space, name) {
   return Folder.findOne({ ownerId, space, name: String(name).trim().toLowerCase() });
 }
 
-export async function createFolder(ownerId, space, { name, description, parentId }) {
+export async function createFolder(ownerId, space, { name, description, parentId, hidden }) {
   requireSpace(space);
   await connectDb();
   const validParentId = await assertValidParent(ownerId, space, parentId);
-  return Folder.create({ ownerId, space, parentId: validParentId, name, description: description || "" });
+  return Folder.create({
+    ownerId,
+    space,
+    parentId: validParentId,
+    name,
+    description: description || "",
+    hidden: Boolean(hidden),
+  });
 }
 
 // Pour MCP : rattacher un document à un dossier par nom, créé au besoin.
@@ -137,12 +144,13 @@ const SPEC_SCALAR_FIELDS = [
   "pressureBp",
 ];
 
-export async function updateFolder(ownerId, id, space, { name, description, parentId, specs }) {
+export async function updateFolder(ownerId, id, space, { name, description, parentId, specs, hidden }) {
   const folder = await getFolder(ownerId, id, space);
   if (!folder) return null;
   if (name !== undefined) folder.name = name;
   if (description !== undefined) folder.description = description;
   if (parentId !== undefined) folder.parentId = await assertValidParent(ownerId, space, parentId);
+  if (hidden !== undefined) folder.hidden = Boolean(hidden);
   if (specs !== undefined) {
     for (const field of SPEC_SCALAR_FIELDS) {
       if (specs[field] !== undefined) folder.set(`specs.${field}`, specs[field]);

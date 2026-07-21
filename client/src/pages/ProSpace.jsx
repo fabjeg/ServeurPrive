@@ -172,7 +172,7 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
               <ProSearch q={query} onOpen={openDoc} />
             ) : (
               <FolderGrid
-                folders={folders}
+                folders={folders.filter((f) => !f.hidden)}
                 unfiledCount={unfiledCount}
                 loading={loading}
                 onOpen={(f) => setView({ name: "folder", folderId: f.id, folderName: f.name })}
