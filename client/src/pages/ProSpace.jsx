@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { Sidebar } from "../components/Sidebar.jsx";
 import { MobileNav } from "../components/MobileNav.jsx";
@@ -59,8 +58,6 @@ function ProSearch({ q, onOpen }) {
 }
 
 export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
-  const navigate = useNavigate();
-
   // { name: "home" | "folder" | "unfiled", folderId?, folderName?, brandId? }
   // brandId n'est posé que pour la vue d'un modèle (dossier enfant) : il
   // permet au bouton retour de remonter vers la marque plutôt que l'accueil.
@@ -83,6 +80,17 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
 
   const searching = Boolean(query);
   const bump = useCallback(() => setVersion((v) => v + 1), []);
+
+  // Marque actuellement affichée dans la navigation (page marque ou page
+  // d'un de ses modèles) — transmise à Jarvis pour le Mode ++ (glossaire de
+  // codes défaut). `folders` ne contient que les dossiers de premier niveau
+  // (marques), d'où le lookup par id pour retrouver le nom depuis un modèle.
+  const activeBrand =
+    view.name === "folder"
+      ? view.brandId
+        ? folders.find((f) => f.id === view.brandId)?.name || null
+        : view.folderName || null
+      : null;
 
   const openDoc = (doc, page = null) => {
     setViewerDoc(doc);
@@ -128,8 +136,6 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
   return (
     <div className="shell">
       <Sidebar
-        spaceLabel="Pro"
-        onChangeSpace={() => navigate("/")}
         folders={folders}
         unfiledCount={unfiledCount}
         activeFolderId={
@@ -278,7 +284,7 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
         />
       )}
 
-      <ChatPanel contextDoc={viewerDoc} onOpenReference={openReference} />
+      <ChatPanel contextDoc={viewerDoc} activeBrand={activeBrand} onOpenReference={openReference} />
     </div>
   );
 }

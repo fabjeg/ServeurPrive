@@ -20,12 +20,6 @@ async function dataUrlToBlob(dataUrl) {
   return (await fetch(dataUrl)).blob();
 }
 
-const PERSO_CATEGORIES = [
-  { value: "fiche de paie", label: "Fiche de paie" },
-  { value: "contrat", label: "Contrat" },
-  { value: "autre", label: "Autre" },
-];
-
 export function UploadPanel({
   space,
   folders = [],
@@ -34,14 +28,13 @@ export function UploadPanel({
   onClose,
   onUploaded,
 }) {
-  const isPerso = space === "perso";
   const [files, setFiles] = useState([]);
   const [scanPages, setScanPages] = useState([]);
   const [reviewFile, setReviewFile] = useState(null);
   const [folderId, setFolderId] = useState(initialFolderId || "");
   const [folderName, setFolderName] = useState(initialFolderName || null); // nom du dossier sélectionné (marque ou modèle)
   const [browsingFolders, setBrowsingFolders] = useState(false);
-  const [category, setCategory] = useState(isPerso ? PERSO_CATEGORIES[2].value : "");
+  const [category, setCategory] = useState("");
   const [tags, setTags] = useState("");
   const [progress, setProgress] = useState(null); // { label, percent }
   const [analysis, setAnalysis] = useState(null); // null | [{ filename, detected?, reason? }]
@@ -74,11 +67,7 @@ export function UploadPanel({
 
   const uploadOne = async (file, meta) => {
     // Upload direct client → Blob privé (jeton signé par /api/upload après
-    // vérification de session) : jamais via une fonction serverless. `space`
-    // voyage dans le clientPayload pour que onUploadCompleted (prod) et la
-    // confirmation explicite ci-dessous pointent vers le même espace —
-    // jamais de défaut silencieux qui pourrait faire atterrir un document
-    // perso dans le coffre pro ou inversement.
+    // vérification de session) : jamais via une fonction serverless.
     const blob = await upload(`${OWNER_PREFIX}/${file.name}`, file, {
       access: "private",
       handleUploadUrl: "/api/upload",
@@ -160,9 +149,8 @@ export function UploadPanel({
 
       // Extraction automatique des informations clés : modèle → dossier,
       // type → catégorie, version → tag. Un échec d'analyse n'annule jamais
-      // l'upload — le document est déjà enregistré. Perso n'a pas de
-      // dossiers : pas d'analyse à y faire.
-      const pdfs = isPerso ? [] : uploaded.filter((d) => d.mimetype === "application/pdf");
+      // l'upload — le document est déjà enregistré.
+      const pdfs = uploaded.filter((d) => d.mimetype === "application/pdf");
       const results = [];
       for (const doc of pdfs) {
         setProgress({ label: `Analyse de ${doc.filename}…`, percent: 100 });
@@ -247,30 +235,28 @@ export function UploadPanel({
     <div className="overlay" role="dialog" aria-modal="true" aria-label="Ajouter des documents">
       <form className="upload-panel" onSubmit={submit}>
         <div className="upload-panel__head">
-          <h2>Ajouter des documents — espace {isPerso ? "personnel" : "pro"}</h2>
+          <h2>Ajouter des documents</h2>
           <button type="button" className="overlay__close" onClick={onClose} aria-label="Fermer">
             ✕
           </button>
         </div>
 
-        {!isPerso && (
-          <div className="upload-panel__folders">
-            <p className="field__label">Dossier de destination</p>
-            <button
-              type="button"
-              className="folder-field"
-              onClick={() => setBrowsingFolders(true)}
-            >
-              <span className={`folder-field__icon ${selectedFolderName ? "" : "folder-field__icon--unfiled"}`}>
-                {selectedFolderName ? <IconSnow /> : <IconFolder />}
-              </span>
-              <span className={`folder-field__name ${selectedFolderName ? "" : "folder-field__name--unfiled"}`}>
-                {selectedFolderName || "Non classé"}
-              </span>
-              <span className="folder-field__action">Parcourir</span>
-            </button>
-          </div>
-        )}
+        <div className="upload-panel__folders">
+          <p className="field__label">Dossier de destination</p>
+          <button
+            type="button"
+            className="folder-field"
+            onClick={() => setBrowsingFolders(true)}
+          >
+            <span className={`folder-field__icon ${selectedFolderName ? "" : "folder-field__icon--unfiled"}`}>
+              {selectedFolderName ? <IconSnow /> : <IconFolder />}
+            </span>
+            <span className={`folder-field__name ${selectedFolderName ? "" : "folder-field__name--unfiled"}`}>
+              {selectedFolderName || "Non classé"}
+            </span>
+            <span className="folder-field__action">Parcourir</span>
+          </button>
+        </div>
 
         <div
           className="upload-panel__drop"
@@ -344,22 +330,12 @@ export function UploadPanel({
         <div className="upload-panel__fields">
           <label className="field">
             <span className="field__label">Catégorie</span>
-            {isPerso ? (
-              <select value={category} onChange={(e) => setCategory(e.target.value)}>
-                {PERSO_CATEGORIES.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type="text"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="factures, contrats, plans…"
-              />
-            )}
+            <input
+              type="text"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder="factures, contrats, plans…"
+            />
           </label>
           <label className="field">
             <span className="field__label">Tags (séparés par des virgules)</span>
@@ -379,7 +355,7 @@ export function UploadPanel({
         </button>
       </form>
 
-      {!isPerso && browsingFolders && (
+      {browsingFolders && (
         <FolderBrowser
           space={space}
           folders={folders}

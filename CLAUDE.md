@@ -78,6 +78,22 @@ authentification.** Jamais de secret dans ce fichier ni dans le repo.
   l'historique du client, juste `{ text, documentId }` — le serveur charge/
   persiste lui-même le fil. `GET`/`DELETE /api/chat/history` pour le
   chargement initial et le bouton "Effacer la conversation" du panneau.
+- **Mode ++** (bouton dans le panneau Jarvis, état local non persisté) :
+  injecte dans le prompt système le glossaire de codes défaut de la marque
+  actuellement affichée dans la navigation (`server/models/Glossary.js`,
+  `server/services/glossary.js` — un document par marque, `entries: [{code, description}]`).
+  Distinct de `Folder.specs.faultCodes` (codes observés sur un modèle
+  précis lors d'un dépannage) : le glossaire est le référentiel *officiel*
+  de la marque. Structure créée vide pour Carrier/Thermo King — jamais de
+  code inventé, à alimenter sur demande explicite de l'utilisateur.
+- **Mono-espace** : l'espace « Perso » (documents personnels, cloisonnement
+  pro/perso) a été entièrement retiré le 2026-07-21 (plus de sélecteur
+  d'espace, `PersoSpace.jsx`/`SpaceHome.jsx` supprimés). L'app s'ouvre
+  directement sur l'espace Pro. Le champ `space` reste dans les schémas
+  Mongoose (toujours `"pro"` désormais) et les routes le forcent en dur
+  côté serveur plutôt que de le supprimer (évite une migration de schéma/
+  index sans bénéfice) — ne jamais réintroduire de valeur `space` dérivée
+  du client.
 
 ## Règles de sécurité (à ne jamais casser)
 

@@ -16,27 +16,6 @@
     letter-spacing: -0.01em;
   }
 
-  &__space {
-    @include focus-ring;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.35rem 0.6rem;
-    border: 1px solid var(--border);
-    border-radius: $radius;
-    font-size: var(--fs-sm);
-    color: var(--text-muted);
-
-    &:hover {
-      color: var(--text);
-    }
-  }
-
-  &__space-change {
-    @include stamp;
-    color: var(--accent);
-  }
-
   &__upload {
     width: 100%;
   }

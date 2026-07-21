@@ -365,12 +365,40 @@
     }
   }
 
+  &__toolbar {
+    display: flex;
+    padding: 0.5rem 0.75rem 0;
+    border-top: 1px solid var(--border);
+    background: var(--surface-raised);
+  }
+
+  &__mode-toggle {
+    @include focus-ring;
+    padding: 0.3rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+
+    &:hover {
+      color: var(--text);
+    }
+
+    &.is-active {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: var(--accent-contrast);
+    }
+  }
+
   &__composer {
     display: flex;
     align-items: flex-end;
     gap: 0.5rem;
     padding: 0.75rem;
-    border-top: 1px solid var(--border);
+    border-top: none;
     background: var(--surface-raised);
   }
 

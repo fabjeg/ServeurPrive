@@ -1,7 +1,6 @@
 // Routes dossiers (modèles de frigo) — toutes derrière requireAuth.
-// `space` obligatoire sur chaque route (query en lecture, body en écriture),
-// même garantie de cloisonnement que routes/documents.js. Les dossiers sont
-// un concept pro-only côté UI, mais la route reste générique.
+// `space` forcé à "pro" (constante, jamais dérivée du client) — app
+// mono-espace, voir routes/documents.js.
 import { Router } from "express";
 import { Readable } from "node:stream";
 import { requireAuth } from "../lib/auth.js";
@@ -20,12 +19,6 @@ import {
 export const foldersRouter = Router();
 foldersRouter.use(requireAuth);
 
-function parseSpace(value) {
-  return value === "pro" || value === "perso" ? value : null;
-}
-
-const SPACE_ERROR = { error: "Paramètre space requis (pro ou perso)." };
-
 function parseParentId(value) {
   if (value === undefined || value === "") return { ok: true, parentId: null };
   if (!/^[0-9a-fA-F]{24}$/.test(value)) return { ok: false };
@@ -34,8 +27,7 @@ function parseParentId(value) {
 
 foldersRouter.get("/", async (req, res, next) => {
   try {
-    const space = parseSpace(req.query.space);
-    if (!space) return res.status(400).json(SPACE_ERROR);
+    const space = "pro";
     const parsed = parseParentId(req.query.parentId);
     if (!parsed.ok) return res.status(400).json({ error: "parentId invalide." });
     const result = await listFolders(req.ownerId, space, { parentId: parsed.parentId });
@@ -48,8 +40,7 @@ foldersRouter.get("/", async (req, res, next) => {
 
 foldersRouter.post("/", async (req, res, next) => {
   try {
-    const space = parseSpace(req.body?.space);
-    if (!space) return res.status(400).json(SPACE_ERROR);
+    const space = "pro";
     const { name, description, parentId, hidden } = req.body || {};
     if (!name || !String(name).trim()) {
       return res.status(400).json({ error: "Nom de dossier requis." });
@@ -69,8 +60,7 @@ foldersRouter.post("/", async (req, res, next) => {
 
 foldersRouter.get("/:id", async (req, res, next) => {
   try {
-    const space = parseSpace(req.query.space);
-    if (!space) return res.status(400).json(SPACE_ERROR);
+    const space = "pro";
     const detail = await getFolderDetail(req.ownerId, req.params.id, space);
     if (!detail) return res.status(404).json({ error: "Dossier introuvable." });
     res.setHeader("Cache-Control", "private, no-store");
@@ -82,8 +72,7 @@ foldersRouter.get("/:id", async (req, res, next) => {
 
 foldersRouter.patch("/:id", async (req, res, next) => {
   try {
-    const space = parseSpace(req.body?.space);
-    if (!space) return res.status(400).json(SPACE_ERROR);
+    const space = "pro";
     const { name, description, parentId, specs, hidden } = req.body || {};
     const folder = await updateFolder(req.ownerId, req.params.id, space, {
       name,
@@ -110,8 +99,7 @@ const LOGO_ALLOWED_MIME = ["image/png", "image/jpeg", "image/webp", "image/svg+x
 
 foldersRouter.get("/:id/logo", async (req, res, next) => {
   try {
-    const space = parseSpace(req.query.space);
-    if (!space) return res.status(400).json(SPACE_ERROR);
+    const space = "pro";
     const folder = await getFolder(req.ownerId, req.params.id, space);
     if (!folder?.logo?.blobUrl) return res.status(404).json({ error: "Pas de logo." });
 
@@ -130,8 +118,7 @@ foldersRouter.get("/:id/logo", async (req, res, next) => {
 
 foldersRouter.post("/:id/logo", async (req, res, next) => {
   try {
-    const space = parseSpace(req.body?.space);
-    if (!space) return res.status(400).json(SPACE_ERROR);
+    const space = "pro";
     const { data, mimetype } = req.body || {};
     if (!data || !mimetype) {
       return res.status(400).json({ error: "data (base64) et mimetype requis." });
@@ -156,8 +143,7 @@ foldersRouter.post("/:id/logo", async (req, res, next) => {
 
 foldersRouter.delete("/:id/logo", async (req, res, next) => {
   try {
-    const space = parseSpace(req.query.space);
-    if (!space) return res.status(400).json(SPACE_ERROR);
+    const space = "pro";
     const folder = await removeFolderLogo(req.ownerId, req.params.id, space);
     if (!folder) return res.status(404).json({ error: "Dossier introuvable." });
     res.json({ folder: folder.toClient() });
@@ -169,8 +155,7 @@ foldersRouter.delete("/:id/logo", async (req, res, next) => {
 // Supprime le dossier (et ses modèles enfants le cas échéant) ; les documents sont détachés.
 foldersRouter.delete("/:id", async (req, res, next) => {
   try {
-    const space = parseSpace(req.query.space);
-    if (!space) return res.status(400).json(SPACE_ERROR);
+    const space = "pro";
     const deleted = await deleteFolder(req.ownerId, req.params.id, space);
     if (!deleted) return res.status(404).json({ error: "Dossier introuvable." });
     res.json({ ok: true });

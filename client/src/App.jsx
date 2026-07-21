@@ -1,10 +1,7 @@
 import { useEffect, useState } from "react";
-import { Route, Routes } from "react-router-dom";
 import { api } from "./api.js";
 import { LoginScreen } from "./components/LoginScreen.jsx";
-import { SpaceHome } from "./components/SpaceHome.jsx";
 import { ProSpace } from "./pages/ProSpace.jsx";
-import { PersoSpace } from "./pages/PersoSpace.jsx";
 import { useTheme } from "./hooks/useTheme.js";
 
 export function App() {
@@ -31,25 +28,6 @@ export function App() {
   }
 
   return (
-    <Routes>
-      <Route
-        path="/"
-        element={
-          <SpaceHome onLogout={handleLogout} themePreference={themePreference} onChooseTheme={onChooseTheme} />
-        }
-      />
-      <Route
-        path="/pro/*"
-        element={
-          <ProSpace onLogout={handleLogout} themePreference={themePreference} onChooseTheme={onChooseTheme} />
-        }
-      />
-      <Route
-        path="/perso/*"
-        element={
-          <PersoSpace onLogout={handleLogout} themePreference={themePreference} onChooseTheme={onChooseTheme} />
-        }
-      />
-    </Routes>
+    <ProSpace onLogout={handleLogout} themePreference={themePreference} onChooseTheme={onChooseTheme} />
   );
 }

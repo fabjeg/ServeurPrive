@@ -43,8 +43,6 @@ export function ThemeSwitch({ preference, onChoose }) {
 }
 
 export function Sidebar({
-  spaceLabel,
-  onChangeSpace,
   folders,
   unfiledCount,
   activeFolderId,
@@ -62,11 +60,6 @@ export function Sidebar({
   return (
     <aside className="sidebar">
       <p className="sidebar__brand">Private Server</p>
-      {spaceLabel && (
-        <button type="button" className="sidebar__space" onClick={onChangeSpace}>
-          Espace {spaceLabel} <span className="sidebar__space-change">Changer</span>
-        </button>
-      )}
 
       <button className="btn btn--primary sidebar__upload" onClick={onOpenUpload}>
         + Ajouter un document

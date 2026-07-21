@@ -40,13 +40,20 @@ function renderMessageText(text, onOpenReference) {
 // au montage, plus de localStorage : source de vérité partagée entre appareils.
 // contextDoc : document ouvert dans le viewer — transmis au serveur pour que
 // « ce document » désigne celui-là (le bot le lit avec read_document).
+// activeBrand : marque affichée dans la navigation (page marque ou un de
+// ses modèles) — utilisée par le Mode ++ pour cibler le bon glossaire de
+// codes défaut (voir server/routes/chat.js).
 // onOpenReference(docId, page) : ouvre un document (et sa page) cité par
 // l'assistant via un marqueur {{open:…}} — voir renderMessageText ci-dessus.
-export function ChatPanel({ contextDoc = null, onOpenReference }) {
+export function ChatPanel({ contextDoc = null, activeBrand = null, onOpenReference }) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]); // { role, text, status? }
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  // Mode ++ : injecte le glossaire de codes défaut de la marque active dans
+  // le prompt système — état local uniquement, jamais persisté, réinitialisé
+  // à chaque ouverture de l'app (voir la spec fournie).
+  const [modePlusPlus, setModePlusPlus] = useState(false);
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
   const abortRef = useRef(null);
@@ -111,6 +118,8 @@ export function ChatPanel({ contextDoc = null, onOpenReference }) {
         body: JSON.stringify({
           text,
           documentId: contextDoc?.id || undefined,
+          modePlusPlus,
+          marque: activeBrand || undefined,
         }),
       });
       if (!res.ok) {
@@ -290,6 +299,18 @@ export function ChatPanel({ contextDoc = null, onOpenReference }) {
                 </div>
               </div>
             ))}
+          </div>
+
+          <div className="chat__toolbar">
+            <button
+              type="button"
+              className={`chat__mode-toggle ${modePlusPlus ? "is-active" : ""}`}
+              onClick={() => setModePlusPlus((v) => !v)}
+              aria-pressed={modePlusPlus}
+              title="Injecte le glossaire de codes défaut de la marque affichée"
+            >
+              Mode ++
+            </button>
           </div>
 
           <footer className="chat__composer">

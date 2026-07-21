@@ -20,6 +20,7 @@ import {
 } from "../services/folders.js";
 import { createRepair, listRepairs, semanticSearchRepairs } from "../services/repairs.js";
 import { appendMessage, clearHistory, getHistory } from "../services/chatHistory.js";
+import { getGlossaryEntries } from "../services/glossary.js";
 
 export const chatRouter = Router();
 
@@ -447,6 +448,18 @@ chatRouter.post("/", requireAuth, async (req, res) => {
         `(id: ${doc._id}, catégorie: ${doc.category}). Quand il dit « ce document », ` +
         `« cette notice » ou pose une question sans préciser, il parle de celui-ci : ` +
         `lis-le avec read_document(id: "${doc._id}") avant de répondre.`;
+    }
+  }
+
+  // Mode ++ (bouton du panneau Jarvis) : injecte le glossaire de codes
+  // défaut de la marque actuellement affichée dans la navigation — best-effort,
+  // n'affecte jamais le comportement normal si désactivé, absent ou vide.
+  if (req.body?.modePlusPlus === true && typeof req.body?.marque === "string" && req.body.marque) {
+    const entries = await getGlossaryEntries(req.ownerId, SPACE, req.body.marque);
+    if (entries.length) {
+      system +=
+        `\n\n[GLOSSAIRE CODES DÉFAUT — ${req.body.marque}]\n` +
+        entries.map((e) => `- ${e.code} : ${e.description}`).join("\n");
     }
   }
 
