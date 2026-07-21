@@ -31,7 +31,9 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
   const [upload, setUpload] = useState(null); // null | { folderId? }
   // Incrémenté à chaque clic sur "Assistant IA" (écran d'accueil) pour
   // forcer l'ouverture du panneau Jarvis — voir ChatPanel.jsx (openSignal).
-  const [assistantSignal, setAssistantSignal] = useState(0);
+  // Reste `undefined` tant qu'on n'a pas cliqué (jamais 0 dès le montage,
+  // sinon ChatPanel ouvrirait le panneau tout seul au premier rendu).
+  const [assistantSignal, setAssistantSignal] = useState(undefined);
 
   const bump = useCallback(() => setVersion((v) => v + 1), []);
 
@@ -92,7 +94,7 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
         <GaugeHome
           folders={folders}
           onSelectBrand={(f) => setView({ name: "folder", folderId: f.id, folderName: f.name })}
-          onOpenAssistant={() => setAssistantSignal((v) => v + 1)}
+          onOpenAssistant={() => setAssistantSignal((v) => (v || 0) + 1)}
         />
         <ChatPanel hideFab openSignal={assistantSignal} onOpenReference={openReference} />
       </>

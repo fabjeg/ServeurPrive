@@ -12,8 +12,23 @@ const START_ANGLE = -225;
 const END_ANGLE = 45;
 const TICK_COUNT = 20;
 const ARC_PATH = "M 40 165 A 90 90 0 1 1 180 165";
-const ARC_LENGTH = 330;
+const ARC_RADIUS = 90;
+const ARC_SWEEP_DEG = END_ANGLE - START_ANGLE; // 270
+// Longueur réelle de l'arc (rayon 90, balayage 270°) — sert de dasharray
+// ET de référence pour dériver le dashoffset depuis l'angle de l'aiguille,
+// pour que le remplissage de l'arc pointe toujours exactement où
+// l'aiguille pointe (jamais deux valeurs indépendantes à recaler à la main).
+const ARC_LENGTH = ARC_RADIUS * ((ARC_SWEEP_DEG * Math.PI) / 180);
+// rotate(deg) qui fait pointer l'aiguille vers le tout début du cadran
+// (angle système ticks = START_ANGLE) — l'aiguille pointe "en haut" (angle
+// système -90) à rotate(0), d'où le décalage de 90.
+const NEEDLE_ZERO_OFFSET = START_ANGLE + 90;
 const REST_NEEDLE_ANGLE = -90;
+
+function offsetForAngle(deg) {
+  const value = (deg - NEEDLE_ZERO_OFFSET) / ARC_SWEEP_DEG;
+  return ARC_LENGTH * (1 - value);
+}
 
 function buildTicks() {
   const ticks = [];
@@ -36,7 +51,7 @@ function buildTicks() {
 
 const TICKS = buildTicks();
 
-export function PressureGauge({ accent, label, restAngle, hoverAngle, arcOffset, onClick }) {
+export function PressureGauge({ accent, label, restAngle, hoverAngle, onClick }) {
   // "rest" = position de départ (avant l'animation de montage), "settled"
   // = position finale — le passage de l'une à l'autre déclenche la
   // transition CSS (voir _pressure-gauge.scss). Remonté à chaque retour
@@ -57,7 +72,7 @@ export function PressureGauge({ accent, label, restAngle, hoverAngle, arcOffset,
   }, []);
 
   const angle = phase === "rest" ? REST_NEEDLE_ANGLE : hovering ? hoverAngle : restAngle;
-  const dashoffset = phase === "rest" ? ARC_LENGTH : arcOffset;
+  const dashoffset = phase === "rest" ? ARC_LENGTH : offsetForAngle(angle);
 
   return (
     <button

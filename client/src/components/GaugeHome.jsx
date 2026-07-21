@@ -15,7 +15,6 @@ const GAUGES = [
     name: "Thermo King",
     restAngle: -10,
     hoverAngle: 5,
-    arcOffset: 90,
   },
   {
     key: "carrier",
@@ -24,7 +23,6 @@ const GAUGES = [
     name: "Carrier",
     restAngle: 15,
     hoverAngle: 30,
-    arcOffset: 130,
   },
 ];
 
@@ -47,7 +45,6 @@ export function GaugeHome({ folders, onSelectBrand, onOpenAssistant }) {
                 label={g.label}
                 restAngle={g.restAngle}
                 hoverAngle={g.hoverAngle}
-                arcOffset={g.arcOffset}
                 onClick={() => folder && onSelectBrand(folder)}
               />
               <p className="gauge-home__brand-name">{g.name}</p>
