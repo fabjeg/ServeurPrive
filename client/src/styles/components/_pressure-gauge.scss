@@ -1,0 +1,122 @@
+@use "../abstracts/variables" as *;
+@use "../abstracts/mixins" as *;
+
+// Cadran de manomètre (PressureGauge.jsx) — fidèle à la maquette fournie.
+// Palette et rayons propres à ce composant, volontairement fixes (ne
+// suivent pas le thème clair/sombre de l'app).
+.gauge-panel {
+  @include focus-ring;
+  display: block;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+
+  &__wrap {
+    display: flex;
+    position: relative;
+    width: 220px;
+    height: 220px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #23272b 0%, #17191b 75%);
+    border: 1px solid #33383d;
+    box-shadow:
+      0 0 0 6px rgba(0, 0, 0, 0.15) inset,
+      0 20px 40px -12px rgba(0, 0, 0, 0.6);
+    align-items: center;
+    justify-content: center;
+    transition: box-shadow 0.4s ease, border-color 0.4s ease;
+
+    @media (max-width: 560px) {
+      width: 170px;
+      height: 170px;
+    }
+  }
+
+  &--blue:hover &__wrap,
+  &--blue:focus-visible &__wrap {
+    border-color: #4a95cc;
+    box-shadow:
+      0 0 0 6px rgba(0, 0, 0, 0.15) inset,
+      0 0 32px -4px rgba(74, 149, 204, 0.45),
+      0 20px 40px -12px rgba(0, 0, 0, 0.6);
+  }
+
+  &--red:hover &__wrap,
+  &--red:focus-visible &__wrap {
+    border-color: #e06840;
+    box-shadow:
+      0 0 0 6px rgba(0, 0, 0, 0.15) inset,
+      0 0 32px -4px rgba(224, 104, 64, 0.45),
+      0 20px 40px -12px rgba(0, 0, 0, 0.6);
+  }
+
+  &__svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  &__tick {
+    stroke: #4a5157;
+    stroke-width: 2;
+
+    &.is-major {
+      stroke: #6b7278;
+      stroke-width: 2.5;
+    }
+  }
+
+  &__arc-bg {
+    fill: none;
+    stroke: #2a2e32;
+    stroke-width: 8;
+  }
+
+  &__arc-fill {
+    fill: none;
+    stroke-width: 8;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  &--blue &__arc-fill {
+    stroke: #2e6f9e;
+  }
+
+  &--red &__arc-fill {
+    stroke: #c1502e;
+  }
+
+  &__needle {
+    transform-origin: 110px 110px;
+    transition: transform 1.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  &--blue &__needle {
+    stroke: #4a95cc;
+  }
+
+  &--red &__needle {
+    stroke: #e06840;
+  }
+
+  &__hub {
+    fill: #141618;
+    stroke: #4a5157;
+    stroke-width: 1.5;
+  }
+
+  &__label {
+    font-family: $font-mono;
+    font-size: 10px;
+    fill: #8b9298;
+    letter-spacing: 1px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &__needle,
+    &__arc-fill {
+      transition: none;
+    }
+  }
+}

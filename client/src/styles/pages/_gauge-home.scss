@@ -1,0 +1,107 @@
+@use "../abstracts/variables" as *;
+@use "../abstracts/mixins" as *;
+
+// Écran d'accueil (GaugeHome.jsx) — palette fixe, propre à cet écran,
+// volontairement indépendante du thème clair/sombre de l'app (comme dans
+// la maquette fournie).
+.gauge-home {
+  min-height: 100vh;
+  width: 100%;
+  background: radial-gradient(ellipse at 50% -10%, #24282c 0%, #1c1f22 55%);
+  color: #e8eaec;
+  font-family: $font-display;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+
+  &__header {
+    text-align: center;
+    margin-bottom: 64px;
+  }
+
+  &__eyebrow {
+    font-family: $font-mono;
+    font-size: 12px;
+    letter-spacing: 3px;
+    color: #8b9298;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  &__title {
+    font-size: 32px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+  }
+
+  &__subtitle {
+    font-size: 14px;
+    color: #8b9298;
+    margin-top: 8px;
+    font-weight: 300;
+  }
+
+  &__panels {
+    display: flex;
+    gap: 56px;
+    flex-wrap: wrap;
+    justify-content: center;
+
+    @media (max-width: 560px) {
+      gap: 40px;
+    }
+  }
+
+  &__panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  &__brand-name {
+    margin-top: 24px;
+    font-size: 19px;
+    font-weight: 500;
+  }
+
+  &__assistant {
+    @include focus-ring;
+    margin-top: 56px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 12px 22px;
+    border-radius: 999px;
+    border: 1px solid #33383d;
+    background: #23272b;
+    color: #8b9298;
+    font-family: $font-mono;
+    font-size: 12.5px;
+    letter-spacing: 1px;
+    transition: color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+
+    &:hover,
+    &:focus-visible {
+      color: #e8a93b;
+      border-color: #e8a93b;
+      box-shadow: 0 0 20px -6px rgba(232, 169, 59, 0.5);
+    }
+  }
+
+  &__assistant-icon {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+  }
+
+  &__footer {
+    margin-top: 48px;
+    font-family: $font-mono;
+    font-size: 11px;
+    color: #565c62;
+    letter-spacing: 1px;
+    text-align: center;
+  }
+}

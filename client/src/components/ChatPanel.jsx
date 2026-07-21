@@ -45,7 +45,17 @@ function renderMessageText(text, onOpenReference) {
 // codes défaut (voir server/routes/chat.js).
 // onOpenReference(docId, page) : ouvre un document (et sa page) cité par
 // l'assistant via un marqueur {{open:…}} — voir renderMessageText ci-dessus.
-export function ChatPanel({ contextDoc = null, activeBrand = null, onOpenReference }) {
+// hideFab : masque le rond flottant habituel (écran d'accueil à cadrans,
+// qui a son propre bouton "Assistant IA" comme unique porte d'entrée).
+// openSignal : change de valeur à chaque clic sur ce bouton externe pour
+// forcer l'ouverture du panneau (voir GaugeHome.jsx/ProSpace.jsx).
+export function ChatPanel({
+  contextDoc = null,
+  activeBrand = null,
+  onOpenReference,
+  hideFab = false,
+  openSignal,
+}) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]); // { role, text, status? }
   const [input, setInput] = useState("");
@@ -64,6 +74,11 @@ export function ChatPanel({ contextDoc = null, activeBrand = null, onOpenReferen
       .then((res) => setMessages(res.messages.map((m) => ({ role: m.role, text: m.text }))))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (openSignal !== undefined) setOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openSignal]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -182,7 +197,7 @@ export function ChatPanel({ contextDoc = null, activeBrand = null, onOpenReferen
 
   return (
     <>
-      {!open && (
+      {!open && !hideFab && (
         <button
           type="button"
           className="chat-fab"

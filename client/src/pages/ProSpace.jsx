@@ -3,59 +3,14 @@ import { api } from "../api.js";
 import { Sidebar } from "../components/Sidebar.jsx";
 import { MobileNav } from "../components/MobileNav.jsx";
 import { DocumentGrid } from "../components/DocumentGrid.jsx";
-import { FolderGrid } from "../components/FolderGrid.jsx";
 import { FolderPage } from "../components/FolderPage.jsx";
-import { FolderForm } from "../components/FolderForm.jsx";
+import { GaugeHome } from "../components/GaugeHome.jsx";
 import { RepairsPage } from "../components/RepairsPage.jsx";
 import { UploadPanel } from "../components/UploadPanel.jsx";
 import { Viewer } from "../components/Viewer.jsx";
 import { ChatPanel } from "../components/ChatPanel.jsx";
 
 const SPACE = "pro";
-
-// Recherche full-text (filename/tags/extractedText), avec extrait de contexte
-// par résultat — voir server/services/documents.js:searchDocumentsFullText.
-function ProSearch({ q, onOpen }) {
-  const [results, setResults] = useState(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setResults(null);
-    api
-      .searchDocuments(SPACE, q)
-      .then((res) => !cancelled && setResults(res.results))
-      .catch(() => !cancelled && setResults([]));
-    return () => {
-      cancelled = true;
-    };
-  }, [q]);
-
-  if (!results) return <p className="grid-empty">Recherche…</p>;
-  if (!results.length) {
-    return (
-      <div className="grid-empty">
-        <p className="grid-empty__title">Aucun résultat</p>
-        <p>Aucun document ne correspond à « {q} ».</p>
-      </div>
-    );
-  }
-  return (
-    <ul className="search-results">
-      {results.map((doc) => (
-        <li key={doc.id} className="search-results__item">
-          <button className="search-results__open" onClick={() => onOpen(doc)}>
-            <span className="search-results__name">{doc.filename}</span>
-            <span className="search-results__meta">
-              {doc.category}
-              {doc.tags.length ? ` · ${doc.tags.join(", ")}` : ""}
-            </span>
-            {doc.excerpt && <span className="search-results__excerpt">…{doc.excerpt}…</span>}
-          </button>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
   // { name: "home" | "folder" | "unfiled", folderId?, folderName?, brandId? }
@@ -69,16 +24,15 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
   const [unfiledCount, setUnfiledCount] = useState(0);
   const [version, setVersion] = useState(0);
 
-  const [query, setQuery] = useState("");
   const [unfiledDocs, setUnfiledDocs] = useState([]);
-  const [loading, setLoading] = useState(false);
 
   const [viewerDoc, setViewerDoc] = useState(null);
   const [viewerPage, setViewerPage] = useState(null);
   const [upload, setUpload] = useState(null); // null | { folderId? }
-  const [creatingFolder, setCreatingFolder] = useState(false);
+  // Incrémenté à chaque clic sur "Assistant IA" (écran d'accueil) pour
+  // forcer l'ouverture du panneau Jarvis — voir ChatPanel.jsx (openSignal).
+  const [assistantSignal, setAssistantSignal] = useState(0);
 
-  const searching = Boolean(query);
   const bump = useCallback(() => setVersion((v) => v + 1), []);
 
   // Marque actuellement affichée dans la navigation (page marque ou page
@@ -108,14 +62,10 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
   };
 
   useEffect(() => {
-    setLoading(true);
-    api
-      .listFolders(SPACE)
-      .then((res) => {
-        setFolders(res.folders);
-        setUnfiledCount(res.unfiledCount);
-      })
-      .finally(() => setLoading(false));
+    api.listFolders(SPACE).then((res) => {
+      setFolders(res.folders);
+      setUnfiledCount(res.unfiledCount);
+    });
   }, [version]);
 
   useEffect(() => {
@@ -132,6 +82,22 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
   };
 
   const goHome = () => setView({ name: "home" });
+
+  // Écran d'accueil : autonome, sans sidebar (voir GaugeHome.jsx) — retour
+  // anticipé avant le <div className="shell">. Le clic sur un cadran entre
+  // dans la navigation habituelle (sidebar + FolderPage) pour cette marque.
+  if (view.name === "home") {
+    return (
+      <>
+        <GaugeHome
+          folders={folders}
+          onSelectBrand={(f) => setView({ name: "folder", folderId: f.id, folderName: f.name })}
+          onOpenAssistant={() => setAssistantSignal((v) => v + 1)}
+        />
+        <ChatPanel hideFab openSignal={assistantSignal} onOpenReference={openReference} />
+      </>
+    );
+  }
 
   return (
     <div className="shell">
@@ -162,33 +128,6 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
         onChooseTheme={onChooseTheme}
       />
       <main className="shell__main">
-        {view.name === "home" && (
-          <>
-            <header className="manifest">
-              <input
-                className="manifest__search"
-                type="search"
-                placeholder="Recherche full-text (nom, tags, contenu des documents)…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                aria-label="Recherche full-text"
-              />
-            </header>
-            {searching ? (
-              <ProSearch q={query} onOpen={openDoc} />
-            ) : (
-              <FolderGrid
-                folders={folders.filter((f) => !f.hidden)}
-                unfiledCount={unfiledCount}
-                loading={loading}
-                onOpen={(f) => setView({ name: "folder", folderId: f.id, folderName: f.name })}
-                onOpenUnfiled={() => setView({ name: "unfiled" })}
-                onCreate={() => setCreatingFolder(true)}
-              />
-            )}
-          </>
-        )}
-
         {view.name === "folder" && (
           <FolderPage
             key={view.folderId}
@@ -257,17 +196,6 @@ export function ProSpace({ themePreference, onChooseTheme, onLogout }) {
           onUploaded={() => {
             setUpload(null);
             bump();
-          }}
-        />
-      )}
-      {creatingFolder && (
-        <FolderForm
-          space={SPACE}
-          onClose={() => setCreatingFolder(false)}
-          onSaved={(folder) => {
-            setCreatingFolder(false);
-            bump();
-            setView({ name: "folder", folderId: folder.id });
           }}
         />
       )}

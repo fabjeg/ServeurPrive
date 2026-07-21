@@ -29,5 +29,7 @@
 @use "components/viewer";
 @use "components/chat";
 @use "components/search-results";
+@use "components/pressure-gauge";
 
 @use "pages/login";
+@use "pages/gauge-home";

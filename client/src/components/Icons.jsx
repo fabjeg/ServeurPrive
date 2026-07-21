@@ -98,6 +98,15 @@ export const IconSparkle = (p) => (
   </Icon>
 );
 
+// Repère "assistant" de la maquette d'accueil (cadrans) — astérisque à 8
+// branches + cercle, distinct d'IconSparkle (déjà utilisée ailleurs).
+export const IconSunburst = (p) => (
+  <Icon strokeWidth="1.6" {...p}>
+    <path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />
+    <circle cx="12" cy="12" r="4.2" />
+  </Icon>
+);
+
 export const IconSend = (p) => (
   <Icon {...p}>
     <path d="M21 3L14.5 21l-3.5-8-8-3.5z" strokeLinejoin="round" />
